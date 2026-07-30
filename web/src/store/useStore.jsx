@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useReducer, useEffect } from 'react'
+import React, { createContext, useContext, useReducer, useEffect, useState } from 'react'
+import { api } from '../utils/api'
 
 const STORAGE_KEY = 'simpleinvoice_data'
 
@@ -64,21 +65,99 @@ function reducer(state, action) {
 
 const StoreContext = createContext(null)
 
+// Maps a reducer action to the matching background sync call to the
+// Postgres-backed API. Errors are swallowed by the caller — localStorage
+// always remains the source of truth for offline/DB-unavailable use.
+function syncActionToRemote(action, priorState) {
+  switch (action.type) {
+    case 'ADD_CLIENT':
+    case 'UPDATE_CLIENT':
+      return api.saveClient(action.payload)
+    case 'DELETE_CLIENT':
+      return api.deleteClient(action.payload)
+
+    case 'ADD_WORK_RATE':
+    case 'UPDATE_WORK_RATE':
+      return api.saveWorkRate(action.payload)
+    case 'DELETE_WORK_RATE':
+      return api.deleteWorkRate(action.payload)
+
+    case 'ADD_INVOICE':
+    case 'UPDATE_INVOICE':
+      return api.saveInvoice(action.payload)
+    case 'DELETE_INVOICE':
+      return api.deleteInvoice(action.payload)
+
+    case 'UPDATE_COMPANY_PROFILE':
+      return api.saveCompanyProfile({ ...priorState.companyProfile, ...action.payload })
+
+    default:
+      return null
+  }
+}
+
 export function StoreProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState)
+  const [dbConnected, setDbConnected] = useState(false)
 
+  // 1. Load instantly from localStorage (works fully offline).
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
       if (saved) dispatch({ type: 'LOAD', payload: JSON.parse(saved) })
     } catch {}
+
+    // 2. Then try the remote Postgres-backed API in the background.
+    //    If it's reachable, treat it as the source of truth and mirror
+    //    it into localStorage as a backup. If not configured / offline,
+    //    fail silently and keep using localStorage only.
+    ;(async () => {
+      try {
+        const [clients, workRates, invoices, companyProfile] = await Promise.all([
+          api.fetchClients(), api.fetchWorkRates(), api.fetchInvoices(), api.fetchCompanyProfile(),
+        ])
+        setDbConnected(true)
+        dispatch({
+          type: 'LOAD',
+          payload: {
+            clients, workRates, invoices,
+            companyProfile: companyProfile || defaultCompanyProfile,
+          },
+        })
+      } catch (err) {
+        setDbConnected(false)
+        console.warn('[SimpleInvoice] Remote DB unavailable, using localStorage only:', err.message)
+      }
+    })()
   }, [])
 
+  // Always mirror state to localStorage as a backup, regardless of DB status.
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+    } catch {}
   }, [state])
 
-  return <StoreContext.Provider value={{ state, dispatch }}>{children}</StoreContext.Provider>
+  // Wrapped dispatch: applies the local reducer update immediately, then
+  // fires a background sync to the remote DB (best-effort, non-blocking).
+  function syncedDispatch(action) {
+    dispatch(action)
+    const remoteCall = syncActionToRemote(action, state)
+    if (remoteCall) {
+      remoteCall
+        .then(() => setDbConnected(true))
+        .catch(err => {
+          setDbConnected(false)
+          console.warn('[SimpleInvoice] Remote sync failed, change kept in localStorage:', err.message)
+        })
+    }
+  }
+
+  return (
+    <StoreContext.Provider value={{ state, dispatch: syncedDispatch, dbConnected }}>
+      {children}
+    </StoreContext.Provider>
+  )
 }
 
 export function useStore() {
