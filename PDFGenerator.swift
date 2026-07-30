@@ -7,11 +7,9 @@ final class InvoicePDFGenerator {
 
     // MARK: - Public API
 
-    /// Generates a PDF for the given invoice and saves it to the Documents directory.
-    /// Returns the file URL on success.
     @discardableResult
-    static func generate(for invoice: Invoice, companyName: String = "My Company", companyAddress: String = "123 Business Street, City - 560001") -> URL? {
-        let html = buildHTML(for: invoice, companyName: companyName, companyAddress: companyAddress)
+    static func generate(for invoice: Invoice, profile: CompanyProfile = CompanyProfile()) -> URL? {
+        let html = buildHTML(for: invoice, profile: profile)
         guard let data = renderHTMLtoPDF(html: html) else { return nil }
 
         let filename = invoice.pdfFilename.isEmpty ? "\(invoice.invoiceNumber).pdf" : invoice.pdfFilename
@@ -41,36 +39,42 @@ final class InvoicePDFGenerator {
 
     // MARK: - HTML Builder
 
-    private static func buildHTML(for invoice: Invoice, companyName: String, companyAddress: String) -> String {
+    private static func buildHTML(for invoice: Invoice, profile: CompanyProfile) -> String {
         let formatter = DateFormatter()
         formatter.dateStyle = .long
+        let dateString = formatter.string(from: invoice.dateCreated)
 
-        let lineItemsHTML = invoice.lineItems.map { item in
+        // Line items rows
+        let lineItemsHTML = invoice.lineItems.enumerated().map { (index, item) in
             """
             <tr>
+                <td style="text-align:center;">\(index + 1)</td>
                 <td>\(item.title)</td>
-                <td>\(item.hsnCode)</td>
-                <td style="text-align:right;">\(String(format: "%.2f", item.quantity))</td>
-                <td style="text-align:right;">₹\(String(format: "%.2f", item.unitPrice))</td>
-                <td style="text-align:right;">₹\(String(format: "%.2f", item.subtotal))</td>
-                <td style="text-align:right;">\(String(format: "%.1f", item.taxPercentage))%</td>
-                <td style="text-align:right;">₹\(String(format: "%.2f", item.cgst))</td>
-                <td style="text-align:right;">₹\(String(format: "%.2f", item.sgst))</td>
-                <td style="text-align:right;font-weight:bold;">₹\(String(format: "%.2f", item.total))</td>
+                <td style="text-align:center;">\(item.hsnCode)</td>
+                <td style="text-align:center;">\(String(format: "%.2f", item.quantity))</td>
+                <td style="text-align:right;">&#8377;\(String(format: "%.2f", item.unitPrice))</td>
+                <td style="text-align:right;font-weight:600;">&#8377;\(String(format: "%.2f", item.subtotal))</td>
             </tr>
             """
         }.joined()
 
+        // Signature block
         let signatureHTML: String
-        if let sigData = invoice.signatureData,
-           let _ = UIImage(data: sigData) {
+        if let sigData = invoice.signatureData, UIImage(data: sigData) != nil {
             let base64 = sigData.base64EncodedString()
-            signatureHTML = "<img src='data:image/png;base64,\(base64)' style='max-width:220px;max-height:80px;border-bottom:1px solid #333;' />"
+            signatureHTML = "<img src='data:image/png;base64,\(base64)' style='max-width:200px;max-height:70px;display:block;margin:8px auto;' />"
         } else {
-            signatureHTML = "<div style='width:220px;height:60px;border-bottom:1px solid #333;'></div>"
+            signatureHTML = "<div style='height:60px;'></div>"
         }
 
         let amountInWords = NumberToWords.inWords(invoice.grandTotal)
+        let cgstAmount = invoice.taxTotal / 2
+        let sgstAmount = invoice.taxTotal / 2
+
+        // Terms HTML
+        let termsHTML = profile.termsAndConditions.enumerated().map { (i, t) in
+            "<li>\(t)</li>"
+        }.joined()
 
         return """
         <!DOCTYPE html>
@@ -79,107 +83,217 @@ final class InvoicePDFGenerator {
         <meta charset="UTF-8"/>
         <style>
             * { box-sizing: border-box; margin: 0; padding: 0; }
-            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 11px; color: #1a1a2e; padding: 30px; }
-            .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
-            .company-block h1 { font-size: 24px; font-weight: 800; color: #0f3460; letter-spacing: -0.5px; }
-            .company-block p { color: #555; margin-top: 4px; line-height: 1.5; }
-            .invoice-meta { text-align: right; }
-            .invoice-meta h2 { font-size: 20px; color: #e94560; font-weight: 700; }
-            .invoice-meta p { color: #555; line-height: 1.8; }
-            .divider { border: none; border-top: 2px solid #0f3460; margin: 16px 0; }
-            .parties { display: flex; gap: 40px; margin-bottom: 20px; }
-            .party-block { flex: 1; background: #f0f4ff; border-radius: 8px; padding: 12px 16px; }
-            .party-block h3 { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #0f3460; margin-bottom: 8px; }
-            .party-block p { line-height: 1.7; color: #333; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-            thead { background: #0f3460; color: white; }
-            thead th { padding: 8px 6px; text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; }
-            tbody tr:nth-child(even) { background: #f7f9ff; }
-            tbody td { padding: 7px 6px; border-bottom: 1px solid #e5e8ef; vertical-align: top; }
-            .totals-block { display: flex; justify-content: flex-end; }
-            .totals-table { width: 280px; }
-            .totals-table td { padding: 5px 8px; }
-            .totals-table .grand-total-row td { font-size: 13px; font-weight: 800; color: #0f3460; background: #eef2ff; border-radius: 4px; }
-            .amount-words { background: #f0f4ff; border-left: 4px solid #0f3460; padding: 10px 14px; margin-bottom: 20px; font-style: italic; color: #333; border-radius: 0 6px 6px 0; }
-            .footer { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 30px; padding-top: 16px; border-top: 1px solid #ddd; }
-            .signature-block { text-align: center; }
-            .signature-block p { font-size: 10px; color: #777; margin-top: 6px; }
-            .status-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
-            .status-draft { background: #fff3cd; color: #856404; }
-            .status-sent { background: #cfe2ff; color: #084298; }
-            .status-paid { background: #d1e7dd; color: #0f5132; }
+            body {
+                font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                font-size: 10.5px;
+                color: #111;
+                padding: 24px 28px;
+                background: #fff;
+            }
+
+            /* ── HEADER ── */
+            .header { text-align: center; padding-bottom: 10px; border-bottom: 2px solid #111; margin-bottom: 10px; }
+            .header .company-name {
+                font-size: 22px;
+                font-weight: 900;
+                text-transform: uppercase;
+                letter-spacing: 1.5px;
+                color: #000;
+                margin-bottom: 3px;
+            }
+            .header .tagline { font-size: 11px; font-weight: 700; color: #333; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+            .header .services { font-size: 10px; color: #555; margin-bottom: 5px; font-style: italic; }
+            .header .address { font-size: 10px; color: #444; margin-bottom: 5px; }
+            .header .badges {
+                display: inline-flex; gap: 16px; font-size: 9.5px;
+                font-weight: 700; color: #000; letter-spacing: 0.3px;
+            }
+            .header .badge-sep { color: #aaa; }
+
+            /* ── INVOICE TITLE ── */
+            .invoice-title {
+                text-align: center;
+                font-size: 14px;
+                font-weight: 900;
+                text-transform: uppercase;
+                letter-spacing: 3px;
+                color: #000;
+                padding: 7px 0;
+                border-bottom: 1px solid #ccc;
+                margin-bottom: 10px;
+            }
+
+            /* ── META BLOCK ── */
+            .meta-block { display: flex; justify-content: space-between; margin-bottom: 12px; }
+            .meta-left { font-size: 10.5px; line-height: 1.9; }
+            .meta-left .label { font-weight: 700; color: #000; }
+            .meta-right { font-size: 10.5px; text-align: right; line-height: 1.9; }
+            .meta-right .label { font-weight: 700; }
+
+            /* ── TABLE ── */
+            table { width: 100%; border-collapse: collapse; margin-bottom: 0; }
+            thead th {
+                background: #111;
+                color: #fff;
+                padding: 7px 8px;
+                font-size: 9.5px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                border: 1px solid #111;
+            }
+            tbody td {
+                padding: 7px 8px;
+                border: 1px solid #ddd;
+                font-size: 10px;
+                vertical-align: middle;
+            }
+            tbody tr:nth-child(even) { background: #f8f8f8; }
+            tbody tr:last-child td { border-bottom: 1px solid #111; }
+
+            /* ── TOTALS ── */
+            .totals-section { display: flex; justify-content: flex-end; margin-top: 0; border: 1px solid #ddd; border-top: none; }
+            .totals-table { width: 300px; border-collapse: collapse; }
+            .totals-table td { padding: 5px 10px; font-size: 10.5px; border-bottom: 1px solid #eee; }
+            .totals-table td:last-child { text-align: right; }
+            .totals-table .grand-row td {
+                font-size: 12px; font-weight: 800; color: #000;
+                background: #f0f0f0; border-top: 2px solid #111;
+                border-bottom: 2px solid #111;
+            }
+            .amount-words {
+                margin-top: 8px;
+                padding: 8px 12px;
+                background: #f5f5f5;
+                border-left: 3px solid #111;
+                font-size: 10px;
+                font-style: italic;
+                color: #333;
+                border-radius: 0 4px 4px 0;
+            }
+
+            /* ── FOOTER ── */
+            .footer {
+                display: flex;
+                justify-content: space-between;
+                margin-top: 18px;
+                padding-top: 14px;
+                border-top: 1px solid #ccc;
+                gap: 20px;
+            }
+            .footer-left { flex: 1; font-size: 10px; line-height: 1.8; }
+            .footer-left h4 {
+                font-size: 10px;
+                text-transform: uppercase;
+                letter-spacing: 0.8px;
+                color: #000;
+                margin-bottom: 4px;
+                font-weight: 800;
+            }
+            .footer-left ul { padding-left: 14px; color: #444; }
+            .footer-left li { margin-bottom: 2px; }
+            .bank-detail .key { font-weight: 700; color: #000; }
+
+            .signatory-box {
+                width: 220px;
+                border: 1px solid #ccc;
+                border-radius: 6px;
+                padding: 10px 14px;
+                text-align: center;
+                font-size: 10px;
+            }
+            .signatory-box .for-ms { font-weight: 800; font-size: 11px; text-transform: uppercase; margin-bottom: 2px; }
+            .signatory-box .role { color: #666; margin-bottom: 4px; font-size: 9.5px; }
+            .signatory-box .sig-name { font-weight: 700; margin-top: 6px; font-size: 10.5px; }
         </style>
         </head>
         <body>
+
+        <!-- HEADER -->
         <div class="header">
-            <div class="company-block">
-                <h1>\(companyName)</h1>
-                <p>\(companyAddress)</p>
-            </div>
-            <div class="invoice-meta">
-                <h2>TAX INVOICE</h2>
-                <p><strong>Invoice #:</strong> \(invoice.invoiceNumber)</p>
-                <p><strong>Date:</strong> \(formatter.string(from: invoice.dateCreated))</p>
-                <p><span class="status-badge status-\(invoice.status.rawValue.lowercased())">\(invoice.status.rawValue)</span></p>
-            </div>
-        </div>
-        <hr class="divider" />
-        <div class="parties">
-            <div class="party-block">
-                <h3>Bill To</h3>
-                <p><strong>\(invoice.clientName)</strong></p>
-                <p>\(invoice.clientAddress)</p>
-                <p>\(invoice.clientEmail)</p>
-                <p><strong>GSTIN:</strong> \(invoice.clientTaxID)</p>
-            </div>
-            <div class="party-block">
-                <h3>From</h3>
-                <p><strong>\(companyName)</strong></p>
-                <p>\(companyAddress)</p>
+            <div class="company-name">\(profile.companyName)</div>
+            <div class="tagline">\(profile.businessTagline)</div>
+            <div class="services">\(profile.businessServices)</div>
+            <div class="address">\(profile.addressLine1), \(profile.addressLine2)</div>
+            <div class="badges">
+                <span>GSTIN: \(profile.companyGSTIN)</span>
+                <span class="badge-sep">|</span>
+                <span>PAN: \(profile.companyPAN)</span>
+                <span class="badge-sep">|</span>
+                <span>Phone: \(profile.companyPhone)</span>
             </div>
         </div>
+
+        <!-- TITLE -->
+        <div class="invoice-title">Tax Invoice</div>
+
+        <!-- META -->
+        <div class="meta-block">
+            <div class="meta-left">
+                <div><span class="label">Invoice No.:</span> \(invoice.invoiceNumber)</div>
+                <div><span class="label">Billed To:</span> \(invoice.clientName)</div>
+                <div><span class="label">Address:</span> \(invoice.clientAddress)</div>
+                <div><span class="label">Party GSTIN:</span> \(invoice.clientGSTIN.isEmpty ? "N/A" : invoice.clientGSTIN)</div>
+                \(invoice.clientPhone.isEmpty ? "" : "<div><span class=\"label\">Phone:</span> \(invoice.clientPhone)</div>")
+            </div>
+            <div class="meta-right">
+                <div><span class="label">Date:</span> \(dateString)</div>
+                <div><span class="label">Status:</span> \(invoice.status.rawValue)</div>
+            </div>
+        </div>
+
+        <!-- LINE ITEMS TABLE -->
         <table>
             <thead>
                 <tr>
-                    <th>Description</th>
-                    <th>HSN</th>
-                    <th>Qty</th>
-                    <th>Unit Price</th>
-                    <th>Amount</th>
-                    <th>Tax%</th>
-                    <th>CGST</th>
-                    <th>SGST</th>
-                    <th>Total</th>
+                    <th style="width:5%;">S.No</th>
+                    <th style="width:38%; text-align:left;">Particular Details</th>
+                    <th style="width:12%;">HSN Code</th>
+                    <th style="width:10%;">Qty</th>
+                    <th style="width:15%; text-align:right;">Rate</th>
+                    <th style="width:20%; text-align:right;">Amount</th>
                 </tr>
             </thead>
             <tbody>
                 \(lineItemsHTML)
             </tbody>
         </table>
-        <div class="totals-block">
+
+        <!-- TOTALS -->
+        <div class="totals-section">
             <table class="totals-table">
-                <tr><td>Subtotal</td><td style="text-align:right;">₹\(String(format: "%.2f", invoice.subtotal))</td></tr>
-                <tr><td>CGST</td><td style="text-align:right;">₹\(String(format: "%.2f", invoice.taxTotal / 2))</td></tr>
-                <tr><td>SGST</td><td style="text-align:right;">₹\(String(format: "%.2f", invoice.taxTotal / 2))</td></tr>
-                <tr class="grand-total-row">
-                    <td>Grand Total</td>
-                    <td style="text-align:right;">₹\(String(format: "%.2f", invoice.grandTotal))</td>
-                </tr>
+                <tr><td>Subtotal</td><td>&#8377;\(String(format: "%.2f", invoice.subtotal))</td></tr>
+                <tr><td>CGST (9%)</td><td>&#8377;\(String(format: "%.2f", cgstAmount))</td></tr>
+                <tr><td>SGST (9%)</td><td>&#8377;\(String(format: "%.2f", sgstAmount))</td></tr>
+                <tr class="grand-row"><td>Estimated Grand Total</td><td>&#8377;\(String(format: "%.2f", invoice.grandTotal))</td></tr>
             </table>
         </div>
-        <div class="amount-words" style="margin-top:12px;">
-            <strong>Amount in Words:</strong> \(amountInWords)
-        </div>
+        <div class="amount-words"><strong>Amount in Words:</strong> \(amountInWords)</div>
+
+        <!-- FOOTER -->
         <div class="footer">
-            <div>
-                <p style="font-size:10px;color:#999;">Thank you for your business!</p>
-                <p style="font-size:9px;color:#bbb;margin-top:4px;">Generated by SimpleInvoice</p>
+            <div class="footer-left">
+                <h4>Bank Details for Payment</h4>
+                <div class="bank-detail"><span class="key">Bank Name &amp; Branch:</span> \(profile.bankNameAndBranch)</div>
+                <div class="bank-detail"><span class="key">Account No.:</span> \(profile.bankAccountNo)</div>
+                <div class="bank-detail"><span class="key">IFSC Code:</span> \(profile.bankIFSCCode)</div>
+
+                <br/>
+                <h4>Terms &amp; Conditions</h4>
+                <ul>
+                    \(termsHTML)
+                </ul>
             </div>
-            <div class="signature-block">
+
+            <div class="signatory-box">
+                <div class="for-ms">For M/S \(profile.companyName)</div>
+                <div class="role">Proprietor / Authorised Signatory</div>
                 \(signatureHTML)
-                <p>Authorized Signature</p>
+                <div style="border-top:1px solid #aaa; padding-top:6px; margin-top:4px;">
+                    <div class="sig-name">\(profile.authorizedSignatoryName)</div>
+                </div>
             </div>
         </div>
+
         </body>
         </html>
         """
@@ -192,8 +306,8 @@ final class InvoicePDFGenerator {
         let renderer = UIPrintPageRenderer()
         renderer.addPrintFormatter(fmt, startingAtPageAt: 0)
 
-        let pageSize = CGSize(width: 595.2, height: 841.8) // A4 in points
-        let margin = UIEdgeInsets(top: 36, left: 36, bottom: 36, right: 36)
+        let pageSize = CGSize(width: 595.2, height: 841.8) // A4
+        let margin = UIEdgeInsets(top: 28, left: 28, bottom: 28, right: 28)
         let printableRect = CGRect(
             x: margin.left, y: margin.top,
             width: pageSize.width - margin.left - margin.right,
@@ -205,15 +319,12 @@ final class InvoicePDFGenerator {
 
         let data = NSMutableData()
         UIGraphicsBeginPDFContextToData(data, CGRect(origin: .zero, size: pageSize), nil)
-
         for pageIndex in 0..<renderer.numberOfPages {
             UIGraphicsBeginPDFPage()
             renderer.drawPage(at: pageIndex, in: UIGraphicsGetPDFContextBounds())
         }
-
         UIGraphicsEndPDFContext()
         return data as Data
-    }
 }
 
 // MARK: - ZIP Exporter

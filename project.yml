@@ -32,6 +32,7 @@ targets:
           - ".git/**"
           - "build/**"
           - ".build/**"
+          - "web/**"
     settings:
       base:
         INFOPLIST_FILE: Info.plist

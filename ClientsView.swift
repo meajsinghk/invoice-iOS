@@ -20,29 +20,36 @@ struct ClientsView: View {
     }
 
     var body: some View {
-        Group {
-            if clients.isEmpty {
-                emptyState
-            } else {
-                clientList
+        ZStack {
+            Color.black.ignoresSafeArea()
+            Group {
+                if clients.isEmpty {
+                    emptyState
+                } else {
+                    clientList
+                }
             }
         }
         .searchable(text: $searchText, prompt: "Search clients…")
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
+                    Haptics.medium()
                     showAddClient = true
                 } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Color.white)
                 }
             }
         }
         .sheet(isPresented: $showAddClient) {
             ClientFormSheet(client: nil)
+                .presentationBackground(.ultraThinMaterial)
         }
         .sheet(item: $clientToEdit) { client in
             ClientFormSheet(client: client)
+                .presentationBackground(.ultraThinMaterial)
         }
     }
 
@@ -50,19 +57,18 @@ struct ClientsView: View {
 
     private var clientList: some View {
         ScrollView {
-            LazyVStack(spacing: 12) {
+            LazyVStack(spacing: 10) {
                 ForEach(filtered) { client in
                     ClientCard(client: client)
-                        .onTapGesture { clientToEdit = client }
+                        .onTapGesture {
+                            Haptics.light()
+                            clientToEdit = client
+                        }
                         .contextMenu {
-                            Button {
-                                clientToEdit = client
-                            } label: {
+                            Button { clientToEdit = client } label: {
                                 Label("Edit", systemImage: "pencil")
                             }
-                            Button(role: .destructive) {
-                                delete(client)
-                            } label: {
+                            Button(role: .destructive) { delete(client) } label: {
                                 Label("Delete", systemImage: "trash")
                             }
                         }
@@ -78,22 +84,22 @@ struct ClientsView: View {
         VStack(spacing: 16) {
             Image(systemName: "person.2.slash")
                 .font(.system(size: 52))
-                .foregroundStyle(.quaternary)
+                .foregroundStyle(Color.white.opacity(0.15))
             Text("No Clients Yet")
                 .font(.title2.bold())
+                .foregroundStyle(Color.white)
             Text("Tap + to add your first client")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.white.opacity(0.45))
             Button {
+                Haptics.medium()
                 showAddClient = true
             } label: {
                 Label("Add Client", systemImage: "plus.circle.fill")
                     .font(.headline)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 12)
-                    .background(
-                        LinearGradient(colors: [.indigo, .purple], startPoint: .leading, endPoint: .trailing)
-                    )
-                    .foregroundStyle(.white)
+                    .background(Color.white)
+                    .foregroundStyle(Color.black)
                     .clipShape(Capsule())
             }
         }
@@ -101,10 +107,8 @@ struct ClientsView: View {
         .padding(.bottom, 80)
     }
 
-    // MARK: - Actions
-
     private func delete(_ client: Client) {
-        withAnimation {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
             modelContext.delete(client)
         }
     }
@@ -117,65 +121,49 @@ struct ClientCard: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            // Avatar
             ZStack {
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [.indigo.opacity(0.2), .purple.opacity(0.15)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(Color.white.opacity(0.1))
                     .frame(width: 48, height: 48)
+                    .overlay { Circle().stroke(Color.white.opacity(0.15), lineWidth: 0.8) }
                 Text(client.name.prefix(1).uppercased())
                     .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(
-                        LinearGradient(colors: [.indigo, .purple], startPoint: .top, endPoint: .bottom)
-                    )
+                    .foregroundStyle(Color.white)
             }
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(client.name)
                     .font(.headline)
+                    .foregroundStyle(Color.white)
                 Text(client.email)
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                if !client.taxID.isEmpty {
-                    Text("GSTIN: \(client.taxID)")
+                    .foregroundStyle(Color.white.opacity(0.5))
+                if !client.gstin.isEmpty {
+                    Text("GSTIN: \(client.gstin)")
                         .font(.caption)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Color.white.opacity(0.3))
                 }
             }
 
             Spacer()
 
-            // Invoice count badge
             if let count = client.invoices?.count, count > 0 {
                 VStack(spacing: 2) {
                     Text("\(count)")
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.indigo)
+                        .foregroundStyle(Color.white)
                     Text("invoices")
                         .font(.system(size: 9))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.white.opacity(0.4))
                 }
             }
 
             Image(systemName: "chevron.right")
                 .font(.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Color.white.opacity(0.2))
         }
         .padding(16)
-        .background {
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.background)
-                .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color(.separator).opacity(0.4), lineWidth: 0.5)
-        }
+        .darkGlassCard()
     }
 }
 
@@ -190,71 +178,96 @@ struct ClientFormSheet: View {
     @State private var name = ""
     @State private var email = ""
     @State private var address = ""
-    @State private var taxID = ""
+    @State private var gstin = ""
+    @State private var phone = ""
+    @State private var panNumber = ""
 
     private var isEditing: Bool { client != nil }
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Contact Info") {
-                    LabeledTextField("Full Name", text: $name, icon: "person.fill")
-                    LabeledTextField("Email", text: $email, icon: "envelope.fill")
-                        .keyboardType(.emailAddress)
-                        .textInputAutocapitalization(.never)
-                }
+            ZStack {
+                Color.black.ignoresSafeArea()
+                Form {
+                    Section {
+                        darkFormField("Full Name", text: $name, icon: "person.fill")
+                        darkFormField("Email", text: $email, icon: "envelope.fill")
+                        darkFormField("Phone", text: $phone, icon: "phone.fill")
+                    } header: { Text("Contact Info").foregroundStyle(Color.white.opacity(0.4)) }
 
-                Section("Address") {
-                    ZStack(alignment: .topLeading) {
-                        if address.isEmpty {
-                            Text("Full address…")
-                                .foregroundStyle(.tertiary)
-                                .padding(.top, 8)
-                                .padding(.leading, 4)
+                    Section {
+                        ZStack(alignment: .topLeading) {
+                            if address.isEmpty {
+                                Text("Full address…")
+                                    .foregroundStyle(Color.white.opacity(0.25))
+                                    .padding(.top, 8).padding(.leading, 4)
+                            }
+                            TextEditor(text: $address)
+                                .frame(minHeight: 80)
+                                .foregroundStyle(Color.white)
+                                .scrollContentBackground(.hidden)
                         }
-                        TextEditor(text: $address)
-                            .frame(minHeight: 80)
-                    }
-                }
+                    } header: { Text("Address").foregroundStyle(Color.white.opacity(0.4)) }
 
-                Section("Tax Details") {
-                    LabeledTextField("GSTIN / Tax ID", text: $taxID, icon: "number.square.fill")
-                        .textInputAutocapitalization(.characters)
+                    Section {
+                        darkFormField("GSTIN / Tax ID", text: $gstin, icon: "number.square.fill")
+                        darkFormField("PAN Number", text: $panNumber, icon: "creditcard.fill")
+                    } header: { Text("Tax Details").foregroundStyle(Color.white.opacity(0.4)) }
                 }
+                .scrollContentBackground(.hidden)
             }
             .navigationTitle(isEditing ? "Edit Client" : "New Client")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                        .foregroundStyle(Color.white.opacity(0.7))
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
                         .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
                         .fontWeight(.semibold)
+                        .foregroundStyle(Color.white)
                 }
             }
             .onAppear { populate() }
         }
     }
 
+    @ViewBuilder
+    private func darkFormField(_ label: String, text: Binding<String>, icon: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .foregroundStyle(Color.white.opacity(0.5))
+                .frame(width: 20)
+            TextField(label, text: text)
+                .foregroundStyle(Color.white)
+        }
+        .listRowBackground(Color.white.opacity(0.06))
+    }
+
     private func populate() {
         guard let c = client else { return }
-        name = c.name; email = c.email; address = c.address; taxID = c.taxID
+        name = c.name; email = c.email; address = c.address
+        gstin = c.gstin; phone = c.phone; panNumber = c.panNumber
     }
 
     private func save() {
         if let c = client {
-            c.name = name; c.email = email; c.address = address; c.taxID = taxID
+            c.name = name; c.email = email; c.address = address
+            c.gstin = gstin; c.phone = phone; c.panNumber = panNumber
         } else {
-            let c = Client(name: name, email: email, address: address, taxID: taxID)
+            let c = Client(name: name, email: email, address: address,
+                           gstin: gstin, phone: phone, panNumber: panNumber)
             modelContext.insert(c)
         }
+        Haptics.success()
         dismiss()
     }
 }
 
-// MARK: - Labeled TextField Helper
+// MARK: - Labeled TextField Helper (kept for backward compat)
 
 struct LabeledTextField: View {
     let label: String
@@ -270,9 +283,11 @@ struct LabeledTextField: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: icon)
-                .foregroundStyle(.indigo)
+                .foregroundStyle(Color.white.opacity(0.5))
                 .frame(width: 20)
             TextField(label, text: $text)
+                .foregroundStyle(Color.white)
         }
     }
 }
+

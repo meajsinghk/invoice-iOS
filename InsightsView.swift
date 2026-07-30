@@ -6,41 +6,28 @@ import Charts
 struct InsightsView: View {
     let invoices: [Invoice]
 
-    private var totalRevenue: Double {
-        invoices.filter { $0.status == .paid }.reduce(0) { $0 + $1.grandTotal }
-    }
+    private var totalRevenue: Double { invoices.filter { $0.status == .paid }.reduce(0) { $0 + $1.grandTotal } }
     private var totalInvoices: Int { invoices.count }
-    private var outstandingBalance: Double {
-        invoices.filter { $0.status != .paid }.reduce(0) { $0 + $1.grandTotal }
-    }
+    private var outstandingBalance: Double { invoices.filter { $0.status != .paid }.reduce(0) { $0 + $1.grandTotal } }
     private var sentCount: Int { invoices.filter { $0.status == .sent }.count }
     private var paidCount: Int { invoices.filter { $0.status == .paid }.count }
     private var draftCount: Int { invoices.filter { $0.status == .draft }.count }
 
-    // Top clients by spend
     private var topClients: [(name: String, total: Double)] {
         var map: [String: Double] = [:]
-        for inv in invoices {
-            map[inv.clientName, default: 0] += inv.grandTotal
-        }
+        for inv in invoices { map[inv.clientName, default: 0] += inv.grandTotal }
         return map.map { (name: $0.key, total: $0.value) }
-            .sorted { $0.total > $1.total }
-            .prefix(5)
-            .map { $0 }
+            .sorted { $0.total > $1.total }.prefix(5).map { $0 }
     }
 
-    // Monthly revenue (last 6 months)
     private var monthlyData: [(month: String, revenue: Double)] {
         let cal = Calendar.current
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM"
+        let formatter = DateFormatter(); formatter.dateFormat = "MMM"
         var map: [Date: Double] = [:]
-
         for inv in invoices where inv.status == .paid {
             let start = cal.dateInterval(of: .month, for: inv.dateCreated)!.start
             map[start, default: 0] += inv.grandTotal
         }
-
         let now = Date()
         return (0..<6).reversed().compactMap { offset -> (String, Double)? in
             guard let date = cal.date(byAdding: .month, value: -offset, to: now),
@@ -51,60 +38,29 @@ struct InsightsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 20) {
-                // KPI Cards
+            VStack(spacing: 16) {
                 kpiGrid
-
-                // Revenue chart
-                if !monthlyData.allSatisfy({ $0.revenue == 0 }) {
-                    revenueChart
-                }
-
-                // Status donut
+                if !monthlyData.allSatisfy({ $0.revenue == 0 }) { revenueChart }
                 statusChart
-
-                // Top clients
-                if !topClients.isEmpty {
-                    topClientsSection
-                }
+                if !topClients.isEmpty { topClientsSection }
             }
-            .padding(16)
-            .padding(.bottom, 40)
+            .padding(16).padding(.bottom, 40)
         }
     }
 
     // MARK: - KPI Grid
 
     private var kpiGrid: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
-            KPICard(
-                title: "Total Revenue",
-                value: "₹\(String(format: "%.0f", totalRevenue))",
-                icon: "indianrupeesign.circle.fill",
-                color: .green,
-                subtitle: "\(paidCount) paid"
-            )
-            KPICard(
-                title: "Invoices",
-                value: "\(totalInvoices)",
-                icon: "doc.fill",
-                color: .indigo,
-                subtitle: "\(draftCount) drafts, \(sentCount) sent"
-            )
-            KPICard(
-                title: "Outstanding",
-                value: "₹\(String(format: "%.0f", outstandingBalance))",
-                icon: "exclamationmark.circle.fill",
-                color: .orange,
-                subtitle: "\(invoices.count - paidCount) unpaid"
-            )
-            KPICard(
-                title: "Avg Invoice",
-                value: invoices.isEmpty ? "—" : "₹\(String(format: "%.0f", invoices.reduce(0) { $0 + $1.grandTotal } / Double(invoices.count)))",
-                icon: "chart.bar.fill",
-                color: .purple,
-                subtitle: "per invoice"
-            )
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+            KPICard(title: "Total Revenue", value: "₹\(String(format: "%.0f", totalRevenue))",
+                    icon: "indianrupeesign.circle.fill", subtitle: "\(paidCount) paid")
+            KPICard(title: "Invoices", value: "\(totalInvoices)",
+                    icon: "doc.fill", subtitle: "\(draftCount) drafts, \(sentCount) sent")
+            KPICard(title: "Outstanding", value: "₹\(String(format: "%.0f", outstandingBalance))",
+                    icon: "exclamationmark.circle.fill", subtitle: "\(invoices.count - paidCount) unpaid")
+            KPICard(title: "Avg Invoice",
+                    value: invoices.isEmpty ? "—" : "₹\(String(format: "%.0f", invoices.reduce(0) { $0 + $1.grandTotal } / Double(invoices.count)))",
+                    icon: "chart.bar.fill", subtitle: "per invoice")
         }
     }
 
@@ -112,50 +68,43 @@ struct InsightsView: View {
 
     private var revenueChart: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Monthly Revenue")
-                .font(.headline)
-
+            Text("Monthly Revenue").font(.headline).foregroundStyle(Color.white)
             Chart {
                 ForEach(monthlyData, id: \.month) { data in
-                    BarMark(
-                        x: .value("Month", data.month),
-                        y: .value("Revenue", data.revenue)
-                    )
-                    .foregroundStyle(
-                        LinearGradient(colors: [.indigo, .purple], startPoint: .bottom, endPoint: .top)
-                    )
-                    .cornerRadius(6)
-                    .annotation(position: .top) {
-                        if data.revenue > 0 {
-                            Text("₹\(Int(data.revenue))")
-                                .font(.system(size: 8))
-                                .foregroundStyle(.secondary)
+                    BarMark(x: .value("Month", data.month), y: .value("Revenue", data.revenue))
+                        .foregroundStyle(Color.white.opacity(0.75))
+                        .cornerRadius(6)
+                        .annotation(position: .top) {
+                            if data.revenue > 0 {
+                                Text("₹\(Int(data.revenue))").font(.system(size: 8)).foregroundStyle(Color.white.opacity(0.5))
+                            }
                         }
-                    }
                 }
             }
             .frame(height: 180)
             .chartYAxis {
                 AxisMarks(position: .leading) { value in
-                    AxisGridLine()
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5)).foregroundStyle(Color.white.opacity(0.1))
                     AxisValueLabel {
                         if let amount = value.as(Double.self) {
-                            Text("₹\(Int(amount))")
-                                .font(.system(size: 9))
+                            Text("₹\(Int(amount))").font(.system(size: 9)).foregroundStyle(Color.white.opacity(0.4))
                         }
                     }
                 }
             }
+            .chartXAxis {
+                AxisMarks { AxisValueLabel().foregroundStyle(Color.white.opacity(0.4)) }
+            }
         }
-        .cardStyle()
+        .padding(16)
+        .darkGlassCard()
     }
 
     // MARK: - Status Donut Chart
 
     private var statusChart: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Invoice Status")
-                .font(.headline)
+            Text("Invoice Status").font(.headline).foregroundStyle(Color.white)
 
             let data: [(String, Double, Color)] = [
                 ("Draft", Double(draftCount), .orange),
@@ -164,21 +113,14 @@ struct InsightsView: View {
             ].filter { $0.1 > 0 }
 
             if data.isEmpty {
-                Text("No invoices yet")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
-                    .padding()
+                Text("No invoices yet").foregroundStyle(Color.white.opacity(0.3)).frame(maxWidth: .infinity).padding()
             } else {
                 HStack(spacing: 24) {
                     Chart {
                         ForEach(data, id: \.0) { item in
-                            SectorMark(
-                                angle: .value("Count", item.1),
-                                innerRadius: .ratio(0.55),
-                                angularInset: 2
-                            )
-                            .foregroundStyle(item.2)
-                            .cornerRadius(4)
+                            SectorMark(angle: .value("Count", item.1), innerRadius: .ratio(0.55), angularInset: 2)
+                                .foregroundStyle(item.2.opacity(0.8))
+                                .cornerRadius(4)
                         }
                     }
                     .frame(width: 120, height: 120)
@@ -186,14 +128,10 @@ struct InsightsView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         ForEach(data, id: \.0) { item in
                             HStack(spacing: 8) {
-                                Circle()
-                                    .fill(item.2)
-                                    .frame(width: 10, height: 10)
-                                Text(item.0)
-                                    .font(.subheadline)
+                                Circle().fill(item.2.opacity(0.8)).frame(width: 10, height: 10)
+                                Text(item.0).font(.subheadline).foregroundStyle(Color.white)
                                 Spacer()
-                                Text("\(Int(item.1))")
-                                    .font(.subheadline.bold())
+                                Text("\(Int(item.1))").font(.subheadline.bold()).foregroundStyle(Color.white)
                             }
                         }
                     }
@@ -201,41 +139,27 @@ struct InsightsView: View {
                 }
             }
         }
-        .cardStyle()
+        .padding(16)
+        .darkGlassCard()
     }
 
     // MARK: - Top Clients
 
     private var topClientsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Top Clients by Spend")
-                .font(.headline)
-
+            Text("Top Clients by Spend").font(.headline).foregroundStyle(Color.white)
             let maxValue = topClients.first?.total ?? 1
-
             ForEach(topClients, id: \.name) { client in
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Text(client.name)
-                            .font(.subheadline)
+                        Text(client.name).font(.subheadline).foregroundStyle(Color.white)
                         Spacer()
-                        Text("₹\(String(format: "%.0f", client.total))")
-                            .font(.subheadline.bold())
-                            .foregroundStyle(.indigo)
+                        Text("₹\(String(format: "%.0f", client.total))").font(.subheadline.bold()).foregroundStyle(Color.white)
                     }
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(Color(.tertiarySystemBackground))
-                                .frame(height: 6)
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [.indigo, .purple],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
+                            RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.08)).frame(height: 6)
+                            RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.6))
                                 .frame(width: geo.size.width * (client.total / maxValue), height: 6)
                         }
                     }
@@ -243,7 +167,8 @@ struct InsightsView: View {
                 }
             }
         }
-        .cardStyle()
+        .padding(16)
+        .darkGlassCard()
     }
 }
 
@@ -253,37 +178,22 @@ struct KPICard: View {
     let title: String
     let value: String
     let icon: String
-    let color: Color
     let subtitle: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Image(systemName: icon)
-                    .font(.system(size: 18))
-                    .foregroundStyle(color)
+                Image(systemName: icon).font(.system(size: 18)).foregroundStyle(Color.white.opacity(0.6))
                 Spacer()
-                Text(subtitle)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                Text(subtitle).font(.caption2).foregroundStyle(Color.white.opacity(0.35))
             }
             Text(value)
                 .font(.system(size: 22, weight: .bold, design: .rounded))
-                .foregroundStyle(.primary)
-                .minimumScaleFactor(0.6)
-                .lineLimit(1)
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.white)
+                .minimumScaleFactor(0.6).lineLimit(1)
+            Text(title).font(.caption).foregroundStyle(Color.white.opacity(0.4))
         }
         .padding(14)
-        .background {
-            RoundedRectangle(cornerRadius: 16)
-                .fill(color.opacity(0.06))
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(color.opacity(0.15), lineWidth: 1)
-        }
+        .darkGlassCard()
     }
 }

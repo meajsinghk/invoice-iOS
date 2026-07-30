@@ -15,38 +15,39 @@ struct InvoiceDatabaseSheet: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Custom segment control
-                Picker("Section", selection: $selectedTab) {
-                    Text("Archive").tag(0)
-                    Text("Insights").tag(1)
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-                .padding(.bottom, 4)
+            ZStack {
+                Color.black.ignoresSafeArea()
+                VStack(spacing: 0) {
+                    Picker("Section", selection: $selectedTab) {
+                        Text("Archive").tag(0)
+                        Text("Insights").tag(1)
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 10)
+                    .padding(.bottom, 6)
 
-                if selectedTab == 0 {
-                    InvoiceArchiveView(invoices: invoices)
-                } else {
-                    InsightsView(invoices: invoices)
+                    if selectedTab == 0 {
+                        InvoiceArchiveView(invoices: invoices)
+                    } else {
+                        InsightsView(invoices: invoices)
+                    }
                 }
             }
             .navigationTitle("Invoice Database")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
+                    Button("Done") { dismiss() }.foregroundStyle(Color.white.opacity(0.7))
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        exportAllPDFs()
-                    } label: {
+                    Button { exportAllPDFs() } label: {
                         if isExporting {
-                            ProgressView().scaleEffect(0.8)
+                            ProgressView().scaleEffect(0.8).tint(.white)
                         } else {
                             Label("Export All", systemImage: "arrow.down.doc.fill")
-                                .font(.subheadline)
+                                .font(.subheadline).foregroundStyle(Color.white.opacity(0.7))
                         }
                     }
                     .disabled(isExporting || invoices.isEmpty)
@@ -64,10 +65,7 @@ struct InvoiceDatabaseSheet: View {
             let url = ZipExporter.zipAllPDFs()
             DispatchQueue.main.async {
                 isExporting = false
-                if let url = url {
-                    exportItems = [url]
-                    showExportSheet = true
-                }
+                if let url = url { exportItems = [url]; showExportSheet = true }
             }
         }
     }
@@ -88,14 +86,14 @@ struct InvoiceArchiveView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Status filter chips
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     FilterChip(label: "All", isSelected: filterStatus == nil) {
-                        filterStatus = nil
+                        Haptics.light(); filterStatus = nil
                     }
                     ForEach(InvoiceStatus.allCases, id: \.rawValue) { status in
                         FilterChip(label: status.rawValue, isSelected: filterStatus == status) {
+                            Haptics.light()
                             filterStatus = filterStatus == status ? nil : status
                         }
                     }
@@ -104,45 +102,41 @@ struct InvoiceArchiveView: View {
                 .padding(.vertical, 10)
             }
 
-            Divider()
+            Divider().background(Color.white.opacity(0.08))
 
             if filtered.isEmpty {
                 VStack(spacing: 14) {
                     Image(systemName: "doc.text.magnifyingglass")
-                        .font(.system(size: 44))
-                        .foregroundStyle(.quaternary)
-                    Text("No Invoices Found")
-                        .font(.title3.bold())
+                        .font(.system(size: 44)).foregroundStyle(Color.white.opacity(0.15))
+                    Text("No Invoices Found").font(.title3.bold()).foregroundStyle(Color.white)
                     Text(filterStatus == nil ? "Generate your first invoice" : "No \(filterStatus!.rawValue) invoices")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.white.opacity(0.4))
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding()
+                .frame(maxWidth: .infinity, maxHeight: .infinity).padding()
             } else {
                 List {
                     ForEach(filtered) { invoice in
                         InvoiceArchiveRow(invoice: invoice)
-                            .onTapGesture { selectedInvoice = invoice }
+                            .onTapGesture { Haptics.light(); selectedInvoice = invoice }
+                            .listRowBackground(Color.white.opacity(0.04))
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                Button(role: .destructive) {
-                                    modelContext.delete(invoice)
-                                } label: {
+                                Button(role: .destructive) { modelContext.delete(invoice) } label: {
                                     Label("Delete", systemImage: "trash")
                                 }
-                                Button {
-                                    cycleStatus(invoice)
-                                } label: {
+                                Button { cycleStatus(invoice) } label: {
                                     Label("Mark \(nextStatus(invoice.status).rawValue)", systemImage: nextStatus(invoice.status).systemImage)
                                 }
-                                .tint(.indigo)
+                                .tint(Color.white.opacity(0.3))
                             }
                     }
                 }
                 .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
         }
         .sheet(item: $selectedInvoice) { invoice in
             InvoicePDFPreviewSheet(invoice: invoice)
+                .presentationBackground(.ultraThinMaterial)
         }
     }
 
@@ -152,6 +146,7 @@ struct InvoiceArchiveView: View {
         case .sent:  invoice.status = .paid
         case .paid:  invoice.status = .draft
         }
+        Haptics.light()
     }
 
     private func nextStatus(_ status: InvoiceStatus) -> InvoiceStatus {
@@ -178,30 +173,24 @@ struct InvoiceArchiveRow: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            // Status indicator
             RoundedRectangle(cornerRadius: 4)
-                .fill(statusColor)
+                .fill(statusColor.opacity(0.8))
                 .frame(width: 4, height: 44)
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text(invoice.invoiceNumber)
-                        .font(.headline)
+                    Text(invoice.invoiceNumber).font(.headline).foregroundStyle(Color.white)
                     Spacer()
                     Text("₹\(String(format: "%.2f", invoice.grandTotal))")
-                        .font(.headline)
-                        .foregroundStyle(.indigo)
+                        .font(.headline).foregroundStyle(Color.white)
                 }
                 HStack {
-                    Text(invoice.clientName)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                    Text(invoice.clientName).font(.subheadline).foregroundStyle(Color.white.opacity(0.5))
                     Spacer()
                     StatusBadge(status: invoice.status)
                 }
                 Text(invoice.dateCreated, style: .date)
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .font(.caption).foregroundStyle(Color.white.opacity(0.3))
             }
         }
         .padding(.vertical, 4)
@@ -223,16 +212,14 @@ struct StatusBadge: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            Image(systemName: status.systemImage)
-                .font(.system(size: 9))
-            Text(status.rawValue)
-                .font(.caption2.bold())
+            Image(systemName: status.systemImage).font(.system(size: 9))
+            Text(status.rawValue).font(.caption2.bold())
         }
         .foregroundStyle(color)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(color.opacity(0.12))
+        .padding(.horizontal, 8).padding(.vertical, 4)
+        .background(color.opacity(0.15))
         .clipShape(Capsule())
+        .overlay { Capsule().stroke(color.opacity(0.25), lineWidth: 0.5) }
     }
 }
 
@@ -247,30 +234,30 @@ struct InvoicePDFPreviewSheet: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if let doc = pdfDoc {
-                    PDFKitView(document: doc)
-                        .ignoresSafeArea(edges: .bottom)
-                } else {
-                    VStack(spacing: 16) {
-                        ProgressView()
-                        Text("Loading PDF…")
-                            .foregroundStyle(.secondary)
+            ZStack {
+                Color.black.ignoresSafeArea()
+                Group {
+                    if let doc = pdfDoc {
+                        PDFKitView(document: doc).ignoresSafeArea(edges: .bottom)
+                    } else {
+                        VStack(spacing: 16) {
+                            ProgressView().tint(.white)
+                            Text("Loading PDF…").foregroundStyle(Color.white.opacity(0.5))
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             .navigationTitle(invoice.invoiceNumber)
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
+                    Button("Close") { dismiss() }.foregroundStyle(Color.white.opacity(0.7))
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showShareSheet = true
-                    } label: {
-                        Image(systemName: "square.and.arrow.up")
+                    Button { showShareSheet = true } label: {
+                        Image(systemName: "square.and.arrow.up").foregroundStyle(Color.white)
                     }
                     .disabled(pdfDoc == nil)
                 }
@@ -288,13 +275,10 @@ struct InvoicePDFPreviewSheet: View {
         if let doc = PDFDocument(url: url) {
             pdfDoc = doc
         } else {
-            // Re-generate if not found
             DispatchQueue.global(qos: .userInitiated).async {
                 let genURL = InvoicePDFGenerator.generate(for: invoice)
                 DispatchQueue.main.async {
-                    if let u = genURL, let doc = PDFDocument(url: u) {
-                        pdfDoc = doc
-                    }
+                    if let u = genURL, let doc = PDFDocument(url: u) { pdfDoc = doc }
                 }
             }
         }
@@ -312,7 +296,7 @@ struct PDFKitView: UIViewRepresentable {
         view.autoScales = true
         view.displayMode = .singlePageContinuous
         view.displayDirection = .vertical
-        view.backgroundColor = UIColor.secondarySystemBackground
+        view.backgroundColor = UIColor.black
         return view
     }
 
@@ -333,19 +317,12 @@ struct FilterChip: View {
             Text(label)
                 .font(.subheadline)
                 .fontWeight(isSelected ? .semibold : .regular)
-                .foregroundStyle(isSelected ? .white : .primary)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 7)
-                .background(
-                    isSelected
-                    ? AnyShapeStyle(LinearGradient(colors: [.indigo, .purple], startPoint: .leading, endPoint: .trailing))
-                    : AnyShapeStyle(Color(.secondarySystemBackground))
-                )
+                .foregroundStyle(isSelected ? Color.black : Color.white.opacity(0.6))
+                .padding(.horizontal, 14).padding(.vertical, 7)
+                .background(isSelected ? Color.white : Color.white.opacity(0.06))
                 .clipShape(Capsule())
                 .overlay {
-                    if !isSelected {
-                        Capsule().stroke(Color(.separator), lineWidth: 0.5)
-                    }
+                    if !isSelected { Capsule().stroke(Color.white.opacity(0.12), lineWidth: 0.5) }
                 }
         }
         .buttonStyle(.plain)
@@ -356,10 +333,9 @@ struct FilterChip: View {
 
 struct ShareSheet: UIViewControllerRepresentable {
     let items: [Any]
-
     func makeUIViewController(context: Context) -> UIActivityViewController {
         UIActivityViewController(activityItems: items, applicationActivities: nil)
     }
-
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
+

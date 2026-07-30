@@ -1,6 +1,70 @@
 import Foundation
 import SwiftData
 
+// MARK: - Company Profile Model (singleton — one record per install)
+
+@Model
+class CompanyProfile {
+    var id: UUID
+    var companyName: String
+    var businessTagline: String
+    var businessServices: String
+    var addressLine1: String
+    var addressLine2: String
+    var companyGSTIN: String
+    var companyPAN: String
+    var companyPhone: String
+    var bankNameAndBranch: String
+    var bankAccountNo: String
+    var bankIFSCCode: String
+    var termsAndConditionsData: Data   // JSON-encoded [String]
+    var authorizedSignatoryName: String
+
+    var termsAndConditions: [String] {
+        get { (try? JSONDecoder().decode([String].self, from: termsAndConditionsData)) ?? CompanyProfile.defaultTerms }
+        set { termsAndConditionsData = (try? JSONEncoder().encode(newValue)) ?? Data() }
+    }
+
+    static let defaultTerms: [String] = [
+        "Certified that the particulars given above are true and correct.",
+        "E.&O.E.",
+        "Subject to Gwalior jurisdiction only.",
+        "Goods once sold will not be taken back."
+    ]
+
+    init(
+        id: UUID = UUID(),
+        companyName: String = "MILAN CONSTRUCTION",
+        businessTagline: String = "WORK CONTRACTOR & CIVIL CONTRACTOR",
+        businessServices: String = "ALL TYPES OF EARTH WORK & CIVIL MAINTENANCE WORKS",
+        addressLine1: String = "Manpura, Village Jalalpur",
+        addressLine2: String = "Morena Road Gwalior, Madhya Pradesh, India 474010",
+        companyGSTIN: String = "23AWKPV3941M1ZY",
+        companyPAN: String = "AWKP3941M",
+        companyPhone: String = "+917770855666",
+        bankNameAndBranch: String = "HDFC BANK GWALIOR",
+        bankAccountNo: String = "50200048493635",
+        bankIFSCCode: String = "HDFC0003707",
+        termsAndConditions: [String] = CompanyProfile.defaultTerms,
+        authorizedSignatoryName: String = "Milandeep Virk"
+    ) {
+        self.id = id
+        self.companyName = companyName
+        self.businessTagline = businessTagline
+        self.businessServices = businessServices
+        self.addressLine1 = addressLine1
+        self.addressLine2 = addressLine2
+        self.companyGSTIN = companyGSTIN
+        self.companyPAN = companyPAN
+        self.companyPhone = companyPhone
+        self.bankNameAndBranch = bankNameAndBranch
+        self.bankAccountNo = bankAccountNo
+        self.bankIFSCCode = bankIFSCCode
+        self.termsAndConditionsData = (try? JSONEncoder().encode(termsAndConditions)) ?? Data()
+        self.authorizedSignatoryName = authorizedSignatoryName
+    }
+}
+
 // MARK: - Client Model
 
 @Model
@@ -9,7 +73,9 @@ class Client {
     var name: String
     var email: String
     var address: String
-    var taxID: String
+    @Attribute(originalName: "taxID") var gstin: String
+    var phone: String
+    var panNumber: String
     @Relationship(deleteRule: .cascade) var invoices: [Invoice]?
 
     init(
@@ -17,13 +83,17 @@ class Client {
         name: String = "",
         email: String = "",
         address: String = "",
-        taxID: String = ""
+        gstin: String = "",
+        phone: String = "",
+        panNumber: String = ""
     ) {
         self.id = id
         self.name = name
         self.email = email
         self.address = address
-        self.taxID = taxID
+        self.gstin = gstin
+        self.phone = phone
+        self.panNumber = panNumber
     }
 }
 
@@ -102,7 +172,9 @@ class Invoice {
     var clientName: String
     var clientEmail: String
     var clientAddress: String
-    var clientTaxID: String
+    var clientGSTIN: String
+    var clientPhone: String
+    var clientPAN: String
     var lineItemsData: Data   // JSON-encoded [LineItem]
     var subtotal: Double
     var taxTotal: Double
@@ -132,7 +204,9 @@ class Invoice {
         clientName: String = "",
         clientEmail: String = "",
         clientAddress: String = "",
-        clientTaxID: String = "",
+        clientGSTIN: String = "",
+        clientPhone: String = "",
+        clientPAN: String = "",
         lineItems: [LineItem] = [],
         subtotal: Double = 0,
         taxTotal: Double = 0,
@@ -147,7 +221,9 @@ class Invoice {
         self.clientName = clientName
         self.clientEmail = clientEmail
         self.clientAddress = clientAddress
-        self.clientTaxID = clientTaxID
+        self.clientGSTIN = clientGSTIN
+        self.clientPhone = clientPhone
+        self.clientPAN = clientPAN
         self.lineItemsData = (try? JSONEncoder().encode(lineItems)) ?? Data()
         self.subtotal = subtotal
         self.taxTotal = taxTotal
