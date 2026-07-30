@@ -3,10 +3,9 @@ options:
   bundleIdPrefix: com.simpleinvoice
   deploymentTarget:
     iOS: "17.0"
-  xcodeVersion: "15.0"
+  xcodeVersion: "15.4"
   developmentLanguage: en
   createIntermediateGroups: true
-  groupSortPosition: top
 
 settings:
   base:
@@ -14,10 +13,8 @@ settings:
     MARKETING_VERSION: "1.0"
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "5.9"
-    TARGETED_DEVICE_FAMILY: "1,2"       # iPhone + iPad
+    TARGETED_DEVICE_FAMILY: "1,2"
     IPHONEOS_DEPLOYMENT_TARGET: "17.0"
-    ENABLE_HARDENED_RUNTIME: YES
-    SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
 
 targets:
   SimpleInvoice:
@@ -29,47 +26,20 @@ targets:
         excludes:
           - "*.yml"
           - "*.md"
+          - "*.plist"
           - ".github/**"
           - ".gitignore"
-          - "*.plist"       # handled separately below
-        includes:
-          - "*.swift"
-      - path: Info.plist
-        type: file
-        buildPhase: none
-    info:
-      path: Info.plist
-      properties:
-        CFBundleName: SimpleInvoice
-        CFBundleDisplayName: SimpleInvoice
-        CFBundleIdentifier: com.simpleinvoice.app
-        CFBundleVersion: "1"
-        CFBundleShortVersionString: "1.0"
-        UILaunchScreen:
-          UIColorName: ""
-        UISupportedInterfaceOrientations:
-          - UIInterfaceOrientationPortrait
-          - UIInterfaceOrientationLandscapeLeft
-          - UIInterfaceOrientationLandscapeRight
-        UISupportedInterfaceOrientations~ipad:
-          - UIInterfaceOrientationPortrait
-          - UIInterfaceOrientationPortraitUpsideDown
-          - UIInterfaceOrientationLandscapeLeft
-          - UIInterfaceOrientationLandscapeRight
-        NSCameraUsageDescription: "Camera access is not required by this app."
-        UIRequiresFullScreen: NO
-        ITSAppUsesNonExemptEncryption: NO
+          - "build/**"
+          - ".build/**"
     settings:
       base:
         INFOPLIST_FILE: Info.plist
-        CODE_SIGN_STYLE: Manual
-        CODE_SIGNING_REQUIRED: NO
-        CODE_SIGNING_ALLOWED: NO
         PRODUCT_NAME: SimpleInvoice
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGNING_ALLOWED: "NO"
+        CODE_SIGN_IDENTITY: ""
     dependencies:
-      - framework: MessageUI.framework
-        embed: false
-      - framework: PDFKit.framework
-        embed: false
-      - framework: PencilKit.framework
-        embed: false
+      - sdk: MessageUI.framework
+      - sdk: PDFKit.framework
+      - sdk: PencilKit.framework
