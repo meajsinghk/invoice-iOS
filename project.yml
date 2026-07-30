@@ -40,6 +40,7 @@ targets:
         CODE_SIGNING_REQUIRED: "NO"
         CODE_SIGNING_ALLOWED: "NO"
         CODE_SIGN_IDENTITY: ""
+        SWIFT_COMPILATION_MODE: singlefile
     dependencies:
       - sdk: MessageUI.framework
       - sdk: PDFKit.framework
