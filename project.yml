@@ -1,6 +1,7 @@
 name: SimpleInvoice
 options:
   bundleIdPrefix: com.simpleinvoice
+  objectVersion: 56
   deploymentTarget:
     iOS: "17.0"
   xcodeVersion: "15.4"
