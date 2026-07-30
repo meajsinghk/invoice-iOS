@@ -94,101 +94,25 @@ struct QuickInvoiceSheet: View {
 
     // MARK: - Client Section
 
-    @ViewBuilder
-    private var clientSectionContent: some View {
-        SectionHeader(title: "Bill To", icon: "person.fill", color: .indigo)
-
-        if !clients.isEmpty {
-            Menu {
-                ForEach(clients) { client in
-                    Button(client.name) { selectClient(client) }
-                }
-                Divider()
-                Button("Manual Entry", action: { selectedClient = nil })
-            } label: {
-                HStack {
-                    Image(systemName: "person.2.fill")
-                        .foregroundStyle(.indigo)
-                    Text(selectedClient?.name ?? "Select a client…")
-                        .foregroundStyle(selectedClient == nil ? Color.secondary : Color.primary)
-                    Spacer()
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
-                .padding(14)
-                .background(Color(.secondarySystemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-            }
-        }
-
-        VStack(spacing: 10) {
-            InvoiceTextField(placeholder: "Client Name", text: $clientName, icon: "person")
-            InvoiceTextField(placeholder: "Email", text: $clientEmail, icon: "envelope")
-                .keyboardType(.emailAddress)
-                .textInputAutocapitalization(.never)
-            InvoiceTextField(placeholder: "Address", text: $clientAddress, icon: "map")
-            InvoiceTextField(placeholder: "GSTIN / Tax ID", text: $clientTaxID, icon: "number.square")
-                .textInputAutocapitalization(.characters)
-        }
-    }
-
     private var clientSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            clientSectionContent
-        }
-        .cardStyle()
+        ClientSectionView(
+            clients: clients,
+            selectedClient: $selectedClient,
+            clientName: $clientName,
+            clientEmail: $clientEmail,
+            clientAddress: $clientAddress,
+            clientTaxID: $clientTaxID,
+            onSelect: selectClient
+        )
     }
 
     // MARK: - Line Items
 
-    @ViewBuilder
-    private var lineItemsSectionContent: some View {
-        SectionHeader(title: "Line Items", icon: "list.bullet.rectangle.fill", color: .green)
-
-        if lineItems.isEmpty {
-            HStack {
-                Spacer()
-                Text("No items yet — tap + to add")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Spacer()
-            }
-            .padding(.vertical, 12)
-        } else {
-            ForEach(lineItems.indices, id: \.self) { idx in
-                LineItemRow(item: $lineItems[idx]) {
-                    withAnimation { lineItems.remove(at: idx) }
-                }
-            }
-        }
-
-        Button {
-            showAddLineItem = true
-        } label: {
-            HStack {
-                Image(systemName: "plus.circle.fill")
-                    .foregroundStyle(.green)
-                Text("Add Item")
-                    .fontWeight(.medium)
-                    .foregroundStyle(.green)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(12)
-            .background(Color.green.opacity(0.08))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay {
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color.green.opacity(0.25), lineWidth: 1)
-            }
-        }
-    }
-
     private var lineItemsSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            lineItemsSectionContent
-        }
-        .cardStyle()
+        LineItemsSectionView(
+            lineItems: $lineItems,
+            showAddLineItem: $showAddLineItem
+        )
     }
 
     // MARK: - Totals Card
@@ -222,33 +146,14 @@ struct QuickInvoiceSheet: View {
 
     private var actionButtons: some View {
         VStack(spacing: 12) {
-            // Generate PDF button
             Button {
                 generateAndSavePDF()
             } label: {
-                HStack {
-                    if isGenerating {
-                        ProgressView()
-                            .tint(.white)
-                            .scaleEffect(0.8)
-                    } else {
-                        Image(systemName: "doc.richtext.fill")
-                    }
-                    Text(isGenerating ? "Generating…" : "Generate & Print PDF")
-                        .fontWeight(.semibold)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(16)
-                .background(
-                    LinearGradient(colors: [.indigo, .purple], startPoint: .leading, endPoint: .trailing)
-                )
-                .foregroundStyle(.white)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
+                GeneratePDFLabel(isGenerating: isGenerating)
             }
             .disabled(isGenerating || lineItems.isEmpty || clientName.isEmpty)
             .buttonStyle(ScaleButtonStyle())
 
-            // Draft Email button
             Button {
                 generateAndSavePDF(thenEmail: true)
             } label: {
@@ -260,11 +165,11 @@ struct QuickInvoiceSheet: View {
                 .frame(maxWidth: .infinity)
                 .padding(16)
                 .background(Color(.secondarySystemBackground))
-                .foregroundStyle(.indigo)
+                .foregroundStyle(Color.indigo)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
                 .overlay {
                     RoundedRectangle(cornerRadius: 14)
-                        .stroke(.indigo.opacity(0.3), lineWidth: 1)
+                        .stroke(Color.indigo.opacity(0.3), lineWidth: 1)
                 }
             }
             .disabled(isGenerating || lineItems.isEmpty || clientName.isEmpty || clientEmail.isEmpty)
@@ -360,7 +265,126 @@ struct QuickInvoiceSheet: View {
     }
 }
 
-// MARK: - Line Item Row
+// MARK: - Generate PDF Label (extracted to avoid WMO if/else crash)
+
+struct GeneratePDFLabel: View {
+    let isGenerating: Bool
+    var body: some View {
+        HStack {
+            if isGenerating {
+                ProgressView().tint(.white).scaleEffect(0.8)
+            } else {
+                Image(systemName: "doc.richtext.fill")
+            }
+            Text(isGenerating ? "Generating…" : "Generate & Print PDF")
+                .fontWeight(.semibold)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(16)
+        .background(LinearGradient(colors: [.indigo, .purple], startPoint: .leading, endPoint: .trailing))
+        .foregroundStyle(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+}
+
+// MARK: - Client Section View (extracted standalone struct — WMO safe)
+
+struct ClientSectionView: View {
+    let clients: [Client]
+    @Binding var selectedClient: Client?
+    @Binding var clientName: String
+    @Binding var clientEmail: String
+    @Binding var clientAddress: String
+    @Binding var clientTaxID: String
+    let onSelect: (Client) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SectionHeader(title: "Bill To", icon: "person.fill", color: .indigo)
+
+            if !clients.isEmpty {
+                Menu {
+                    ForEach(clients) { client in
+                        Button(client.name) { onSelect(client) }
+                    }
+                    Divider()
+                    Button("Manual Entry") { selectedClient = nil }
+                } label: {
+                    HStack {
+                        Image(systemName: "person.2.fill").foregroundStyle(Color.indigo)
+                        Text(selectedClient?.name ?? "Select a client…")
+                            .foregroundStyle(selectedClient == nil ? Color.secondary : Color.primary)
+                        Spacer()
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.caption).foregroundStyle(Color.secondary)
+                    }
+                    .padding(14)
+                    .background(Color(.secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+            }
+
+            VStack(spacing: 10) {
+                InvoiceTextField(placeholder: "Client Name", text: $clientName, icon: "person")
+                InvoiceTextField(placeholder: "Email", text: $clientEmail, icon: "envelope")
+                    .keyboardType(.emailAddress)
+                    .textInputAutocapitalization(.never)
+                InvoiceTextField(placeholder: "Address", text: $clientAddress, icon: "map")
+                InvoiceTextField(placeholder: "GSTIN / Tax ID", text: $clientTaxID, icon: "number.square")
+                    .textInputAutocapitalization(.characters)
+            }
+        }
+        .cardStyle()
+    }
+}
+
+// MARK: - Line Items Section View (extracted standalone struct — WMO safe)
+
+struct LineItemsSectionView: View {
+    @Binding var lineItems: [LineItem]
+    @Binding var showAddLineItem: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SectionHeader(title: "Line Items", icon: "list.bullet.rectangle.fill", color: .green)
+
+            if lineItems.isEmpty {
+                HStack {
+                    Spacer()
+                    Text("No items yet — tap + to add")
+                        .font(.subheadline)
+                        .foregroundStyle(Color.secondary)
+                    Spacer()
+                }
+                .padding(.vertical, 12)
+            } else {
+                ForEach(lineItems.indices, id: \.self) { idx in
+                    LineItemRow(item: $lineItems[idx]) {
+                        withAnimation { lineItems.remove(at: idx) }
+                    }
+                }
+            }
+
+            Button { showAddLineItem = true } label: {
+                HStack {
+                    Image(systemName: "plus.circle.fill").foregroundStyle(Color.green)
+                    Text("Add Item").fontWeight(.medium).foregroundStyle(Color.green)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(12)
+                .background(Color.green.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.green.opacity(0.25), lineWidth: 1)
+                }
+            }
+        }
+        .cardStyle()
+    }
+}
+
+
 
 struct LineItemRow: View {
     @Binding var item: LineItem
