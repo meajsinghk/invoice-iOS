@@ -21,20 +21,32 @@ jobs:
         with:
           xcode-version: '15.4'
 
-      - name: Install tools (XcodeGen + xcpretty)
-        run: |
-          brew install xcodegen
-          gem install xcpretty --no-document
+      - name: Install XcodeGen
+        run: brew install xcodegen
 
       - name: Generate Xcode project
         run: xcodegen generate --spec project.yml
 
-      - name: Resolve packages
+      - name: Diagnostics (list schemes & SDKs)
         run: |
-          xcodebuild -resolvePackageDependencies \
+          echo "=== Available schemes ==="
+          xcodebuild -project SimpleInvoice.xcodeproj -list
+          echo "=== Available SDKs ==="
+          xcodebuild -showsdks
+
+      - name: Build for Simulator
+        run: |
+          xcodebuild \
             -project SimpleInvoice.xcodeproj \
             -scheme SimpleInvoice \
-            -clonedSourcePackagesDirPath .build
+            -sdk iphonesimulator \
+            -destination 'platform=iOS Simulator,OS=17.5,name=iPhone 15' \
+            -configuration Release \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
 
       - name: Build for iOS device (unsigned)
         run: |
@@ -48,12 +60,13 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             ONLY_ACTIVE_ARCH=NO \
-            build 2>&1 | xcpretty
-          exit ${PIPESTATUS[0]}
+            build
 
       - name: Package unsigned IPA
         run: |
-          APP_PATH=$(find build/DerivedData -name "SimpleInvoice.app" -not -path "*/Index.noindex/*" | head -1)
+          APP_PATH=$(find build/DerivedData -name "SimpleInvoice.app" \
+            -not -path "*/Index.noindex/*" \
+            -not -path "*iphonesimulator*" | head -1)
           echo "Found .app at: $APP_PATH"
           mkdir -p build/ipa/Payload
           cp -r "$APP_PATH" build/ipa/Payload/
@@ -61,20 +74,8 @@ jobs:
           cd ../.. && ls -lh SimpleInvoice-unsigned.ipa
 
       - name: Upload IPA artifact
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v4
         with:
           name: SimpleInvoice-unsigned-ipa
           path: SimpleInvoice-unsigned.ipa
           retention-days: 30
-
-      - name: Build for Simulator (sanity check)
-        run: |
-          xcodebuild \
-            -project SimpleInvoice.xcodeproj \
-            -scheme SimpleInvoice \
-            -sdk iphonesimulator \
-            -destination 'platform=iOS Simulator,name=iPhone 15' \
-            -configuration Debug \
-            CODE_SIGNING_ALLOWED=NO \
-            build 2>&1 | xcpretty
-          exit ${PIPESTATUS[0]}
