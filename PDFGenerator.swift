@@ -227,7 +227,7 @@ enum ZipExporter {
         guard !urls.isEmpty else { return nil }
 
         let tempDir = FileManager.default.temporaryDirectory
-        let zipURL = tempDir.appendingPathComponent("SimpleInvoice_All_\(Date().timeIntervalSince1970).zip")
+        _ = tempDir.appendingPathComponent("SimpleInvoice_All_\(Date().timeIntervalSince1970).zip")
 
         // Use a simple file concatenation approach via UIActivityViewController
         // Real ZIP requires a ZIP library or Process; here we bundle as a temp folder

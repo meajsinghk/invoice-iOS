@@ -29,6 +29,7 @@ targets:
           - "*.plist"
           - ".github/**"
           - ".gitignore"
+          - ".git/**"
           - "build/**"
           - ".build/**"
     settings:
