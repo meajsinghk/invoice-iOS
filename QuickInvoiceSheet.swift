@@ -358,9 +358,9 @@ struct LineItemsSectionView: View {
                 }
                 .padding(.vertical, 12)
             } else {
-                ForEach(lineItems.indices, id: \.self) { idx in
-                    LineItemRow(item: $lineItems[idx]) {
-                        withAnimation { lineItems.remove(at: idx) }
+                ForEach($lineItems) { $item in
+                    LineItemRow(item: $item) {
+                        withAnimation { lineItems.removeAll { $0.id == item.id } }
                     }
                 }
             }

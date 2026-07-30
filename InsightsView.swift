@@ -213,8 +213,7 @@ struct InsightsView: View {
 
             let maxValue = topClients.first?.total ?? 1
 
-            ForEach(topClients.indices, id: \.self) { idx in
-                let client = topClients[idx]
+            ForEach(topClients, id: \.name) { client in
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         Text(client.name)
