@@ -69,7 +69,12 @@ function reducer(state, action) {
         invoices: mergedInvoices,
         ledgerEntries: mergeById(state.ledgerEntries, incoming.ledgerEntries),
         companyProfile: incoming.companyProfile
-          ? { ...defaultCompanyProfile, ...incoming.companyProfile }
+          ? {
+              ...defaultCompanyProfile,
+              ...incoming.companyProfile,
+              // Always preserve stampImageUrl — DB rows saved before this field was added may have null
+              stampImageUrl: incoming.companyProfile.stampImageUrl || defaultCompanyProfile.stampImageUrl,
+            }
           : state.companyProfile,
       }
     }

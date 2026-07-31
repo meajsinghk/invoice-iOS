@@ -32,9 +32,11 @@ export async function generateInvoicePDF(invoice, companyProfile = {}) {
       'Goods once sold will not be taken back.',
     ],
     authorizedSignatoryName: '',
-    stampImageUrl: '',
+    stampImageUrl: '/stamp.png',
     ...companyProfile,
   }
+  // Guard: if DB returned null/empty for stampImageUrl, fall back to default
+  if (!p.stampImageUrl) p.stampImageUrl = '/stamp.png'
 
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
   const pageW = doc.internal.pageSize.getWidth()
@@ -337,15 +339,18 @@ export async function generateInvoicePDF(invoice, companyProfile = {}) {
       }
       const base64 = btoa(binary)
 
-      // Detect image type from magic bytes: JPG starts with FFD8, PNG with 89504E47
-      const magic = bytes[0] * 256 + bytes[1]
-      const imgType = magic === 0xFFD8 ? 'JPEG' : 'PNG'
-      const dataUrl = `data:image/${imgType === 'JPEG' ? 'jpeg' : 'png'};base64,${base64}`
+      // Detect image type: PNG magic = 89 50 4E 47, JPEG = FF D8
+      const isPNG = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47
+      const imgType = isPNG ? 'PNG' : 'JPEG'
+      const mimeType = isPNG ? 'image/png' : 'image/jpeg'
+      const dataUrl = `data:${mimeType};base64,${base64}`
 
       const stampW = sigW * 0.85
       const stampH = 60
-      doc.addImage(dataUrl, imgType, sigX, rightY, stampW, stampH)
-      rightY += stampH + 8
+      // Clamp to page if near bottom
+      const safeRightY = Math.min(rightY, pageH - margin - stampH - 20)
+      doc.addImage(dataUrl, imgType, sigX, safeRightY, stampW, stampH)
+      rightY = safeRightY + stampH + 8
     } catch (e) {
       console.warn('[PDF] Stamp failed to embed:', e.message)
       // Draw placeholder text so user knows stamp is missing

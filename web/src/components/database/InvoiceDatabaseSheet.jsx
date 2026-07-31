@@ -14,7 +14,7 @@ export default function InvoiceDatabaseSheet({ onClose }) {
   const [searchQuery, setSearchQuery] = useState('')
 
   function handleExport() {
-    exportAllDataToCSV(state.ledgerEntries || [], state.clients, state.operators || [])
+    exportAllDataToCSV(state.ledgerEntries || [], state.clients, state.operators || [], state.invoices || [])
   }
 
   return (
