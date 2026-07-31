@@ -211,11 +211,27 @@ export async function generateInvoicePDF(invoice, companyProfile = {}) {
   })
   const grandTotal = subtotal + totalCGST + totalSGST + totalIGST
 
+  // Build totals rows with rates shown next to each tax line
+  // Group by rate to show clean "CGST @ 9%: Rs. X" format
+  const cgstByRate = {}, sgstByRate = {}, igstByRate = {}
+  invoice.lineItems.forEach(item => {
+    const sub = item.quantity * item.unitPrice
+    if ((item.cgstRate || 0) > 0) {
+      cgstByRate[item.cgstRate] = (cgstByRate[item.cgstRate] || 0) + sub * item.cgstRate / 100
+    }
+    if ((item.sgstRate || 0) > 0) {
+      sgstByRate[item.sgstRate] = (sgstByRate[item.sgstRate] || 0) + sub * item.sgstRate / 100
+    }
+    if ((item.igstRate || 0) > 0) {
+      igstByRate[item.igstRate] = (igstByRate[item.igstRate] || 0) + sub * item.igstRate / 100
+    }
+  })
+
   const totalsRows = [
     ['Subtotal', subtotal],
-    ...(totalCGST > 0 ? [['CGST', totalCGST]] : []),
-    ...(totalSGST > 0 ? [['SGST', totalSGST]] : []),
-    ...(totalIGST > 0 ? [['IGST', totalIGST]] : []),
+    ...Object.entries(cgstByRate).map(([rate, amt]) => [`CGST @ ${rate}%`, amt]),
+    ...Object.entries(sgstByRate).map(([rate, amt]) => [`SGST @ ${rate}%`, amt]),
+    ...Object.entries(igstByRate).map(([rate, amt]) => [`IGST @ ${rate}%`, amt]),
   ]
 
   doc.setFontSize(9)
@@ -301,54 +317,42 @@ export async function generateInvoicePDF(invoice, companyProfile = {}) {
   const sigW = 200
   const sigX = pageW - margin - sigW
 
-  // Load stamp image via HTMLImageElement + canvas — most reliable cross-browser approach
+  // STAMP IMAGE — pure fetch+btoa approach, no canvas needed, works in all browsers
   if (p.stampImageUrl) {
     try {
-      const stampBase64 = await new Promise((resolve, reject) => {
-        const img = new window.Image()
-        img.crossOrigin = 'anonymous'
-        img.onload = () => {
-          const canvas = document.createElement('canvas')
-          canvas.width = img.naturalWidth || img.width
-          canvas.height = img.naturalHeight || img.height
-          const ctx = canvas.getContext('2d')
-          ctx.drawImage(img, 0, 0)
-          try {
-            resolve(canvas.toDataURL('image/png'))
-          } catch {
-            // Canvas tainted (CORS) — fall back to fetch
-            reject(new Error('canvas tainted'))
-          }
-        }
-        img.onerror = () => reject(new Error('img load failed'))
-        // Force cache-busting on first load so browser doesn't block
-        const src = p.stampImageUrl.startsWith('http')
-          ? p.stampImageUrl
-          : `${window.location.origin}${p.stampImageUrl.startsWith('/') ? '' : '/'}${p.stampImageUrl}`
-        img.src = src
-      }).catch(async () => {
-        // Fallback: fetch → FileReader
-        const resp = await fetch(
-          p.stampImageUrl.startsWith('http')
-            ? p.stampImageUrl
-            : `${window.location.origin}${p.stampImageUrl.startsWith('/') ? '' : '/'}${p.stampImageUrl}`
-        )
-        const blob = await resp.blob()
-        return new Promise((res2, rej2) => {
-          const fr = new FileReader()
-          fr.onload = () => res2(fr.result)
-          fr.onerror = rej2
-          fr.readAsDataURL(blob)
-        })
-      })
+      const stampUrl = p.stampImageUrl.startsWith('http')
+        ? p.stampImageUrl
+        : `${window.location.origin}${p.stampImageUrl.startsWith('/') ? '' : '/'}${p.stampImageUrl}`
 
-      // Stamp dimensions: proportional to keep aspect ratio, max width = sigW * 0.85
+      const resp = await fetch(stampUrl, { cache: 'force-cache' })
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+      const buffer = await resp.arrayBuffer()
+      const bytes = new Uint8Array(buffer)
+
+      // btoa in chunks to avoid call-stack overflow on large images
+      let binary = ''
+      const chunkSize = 8192
+      for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+        binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize))
+      }
+      const base64 = btoa(binary)
+
+      // Detect image type from magic bytes: JPG starts with FFD8, PNG with 89504E47
+      const magic = bytes[0] * 256 + bytes[1]
+      const imgType = magic === 0xFFD8 ? 'JPEG' : 'PNG'
+      const dataUrl = `data:image/${imgType === 'JPEG' ? 'jpeg' : 'png'};base64,${base64}`
+
       const stampW = sigW * 0.85
-      const stampH = 56
-      doc.addImage(stampBase64, 'PNG', sigX, rightY, stampW, stampH)
-      rightY += stampH + 6
+      const stampH = 60
+      doc.addImage(dataUrl, imgType, sigX, rightY, stampW, stampH)
+      rightY += stampH + 8
     } catch (e) {
-      console.warn('[PDF] Stamp image failed to embed:', e.message)
+      console.warn('[PDF] Stamp failed to embed:', e.message)
+      // Draw placeholder text so user knows stamp is missing
+      doc.setFontSize(7)
+      doc.setTextColor(180, 0, 0)
+      doc.text('[Stamp not loaded]', pageW - margin, rightY + 8, { align: 'right' })
+      rightY += 16
     }
   }
 

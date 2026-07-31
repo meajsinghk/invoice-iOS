@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useStore } from '../../store/useStore'
+import { useStore, uuid } from '../../store/useStore'
 import StatusBadge from '../ui/StatusBadge'
 import FilterChip from '../ui/FilterChip'
 
@@ -34,6 +34,45 @@ export default function InvoiceArchive({ timeRange = 'All Time', searchQuery = '
   function cycleStatus(invoice) {
     const nextStatus = STATUS_CYCLE[invoice.status] || 'Draft'
     dispatch({ type: 'UPDATE_INVOICE', payload: { ...invoice, status: nextStatus } })
+
+    // When an invoice is marked Received: auto-create a ClientPayment ledger entry
+    // so it shows up immediately in the Insights "Payments Received" metric.
+    // Avoid duplicates by checking if an entry already exists for this invoice.
+    if (nextStatus === 'Received') {
+      const alreadyExists = (state.ledgerEntries || []).some(
+        e => e.transactionType === 'ClientPayment' && e.noteDescription === `Payment for Invoice ${invoice.invoiceNumber}`
+      )
+      if (!alreadyExists) {
+        // Find the linked client profile (if any) to get a proper entityId
+        const clientObj = (state.clients || []).find(
+          c => c.name.toLowerCase() === (invoice.clientName || '').toLowerCase()
+        )
+        dispatch({
+          type: 'ADD_LEDGER_ENTRY',
+          payload: {
+            id: uuid(),
+            timestamp: new Date().toISOString(),
+            transactionType: 'ClientPayment',
+            amount: invoice.grandTotal,   // positive = money received
+            noteDescription: `Payment for Invoice ${invoice.invoiceNumber}`,
+            generatedByPerson: invoice.generatedByPerson || '',
+            entityType: 'Client',
+            entityId: clientObj ? clientObj.id : invoice.id,
+            lineItems: [],
+          },
+        })
+      }
+    }
+
+    // When an invoice is un-received (cycled back to Draft), remove the auto-entry
+    if (invoice.status === 'Received') {
+      const autoEntry = (state.ledgerEntries || []).find(
+        e => e.transactionType === 'ClientPayment' && e.noteDescription === `Payment for Invoice ${invoice.invoiceNumber}`
+      )
+      if (autoEntry) {
+        dispatch({ type: 'DELETE_LEDGER_ENTRY', payload: autoEntry.id })
+      }
+    }
   }
 
   function downloadPDF(invoice) {
