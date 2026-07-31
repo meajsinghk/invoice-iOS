@@ -159,7 +159,14 @@ export default function InvoiceArchive({ timeRange = 'All Time', searchQuery = '
                   style={{ padding: '5px 12px', borderRadius: 7, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                   → {STATUS_CYCLE[invoice.status] || 'Draft'}
                 </button>
-                <button onClick={() => dispatch({ type: 'DELETE_INVOICE', payload: invoice.id })}
+                <button onClick={() => {
+                    // Delete the invoice AND any ledger entries linked to it (by invoice number)
+                    const linked = (state.ledgerEntries || []).filter(e =>
+                      e.noteDescription && e.noteDescription.includes(invoice.invoiceNumber)
+                    )
+                    linked.forEach(e => dispatch({ type: 'DELETE_LEDGER_ENTRY', payload: e.id }))
+                    dispatch({ type: 'DELETE_INVOICE', payload: invoice.id })
+                  }}
                   style={{ padding: '5px 12px', borderRadius: 7, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171', fontSize: 12, fontWeight: 600, marginLeft: 'auto', cursor: 'pointer' }}>
                   Delete
                 </button>

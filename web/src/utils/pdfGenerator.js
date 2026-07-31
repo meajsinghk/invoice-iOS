@@ -315,9 +315,10 @@ export async function generateInvoicePDF(invoice, companyProfile = {}) {
     })
   })
 
-  // ── RIGHT COLUMN: SIGNATORY (right-aligned) ──────────────────
+  // ── RIGHT COLUMN: SIGNATORY (center-aligned within column) ──────────────────
   const sigW = 200
   const sigX = pageW - margin - sigW
+  const sigCx = sigX + sigW / 2   // center of the signature column
 
   // STAMP IMAGE — pure fetch+btoa approach, no canvas needed, works in all browsers
   if (p.stampImageUrl) {
@@ -352,45 +353,61 @@ export async function generateInvoicePDF(invoice, companyProfile = {}) {
         naturalH = ((bytes[20] << 24) | (bytes[21] << 16) | (bytes[22] << 8) | bytes[23]) >>> 0
       }
 
-      // Stamp fills the right column width; height derived from aspect ratio (max 90pt)
-      const stampW = sigW * 0.95
-      const stampH = naturalW > 0
-        ? Math.min(90, stampW * (naturalH / naturalW))
-        : 72   // safe fallback if dimensions unreadable
+      // For portrait images (H > W) constrain by height; for landscape constrain by width
+      const maxW = sigW * 0.95
+      const maxH = 130
+      let stampW, stampH
+      if (naturalW > 0 && naturalH > 0) {
+        const aspectRatio = naturalW / naturalH
+        if (naturalH > naturalW) {
+          // Portrait: fit to max height
+          stampH = maxH
+          stampW = stampH * aspectRatio
+          if (stampW > maxW) { stampW = maxW; stampH = stampW / aspectRatio }
+        } else {
+          // Landscape: fit to max width
+          stampW = maxW
+          stampH = stampW / aspectRatio
+          if (stampH > maxH) { stampH = maxH; stampW = stampH * aspectRatio }
+        }
+      } else {
+        stampW = 90; stampH = 120   // safe fallback for unknown dimensions
+      }
 
       // Clamp vertically — never run off-page
-      const safeRightY = Math.min(rightY, pageH - margin - stampH - 20)
+      const safeRightY = Math.min(rightY, pageH - margin - stampH - 30)
 
+      // Center the stamp horizontally within the signature column
+      const stampX = sigCx - stampW / 2
       // 'NONE' alias avoids jsPDF adding a white background box on some builds
-      doc.addImage(dataUrl, imgType, sigX, safeRightY, stampW, stampH, undefined, 'NONE')
+      doc.addImage(dataUrl, imgType, stampX, safeRightY, stampW, stampH, undefined, 'NONE')
       rightY = safeRightY + stampH + 8
     } catch (e) {
       console.warn('[PDF] Stamp failed to embed:', e.message)
-      // Draw placeholder text so user knows stamp is missing
       doc.setFontSize(7)
       doc.setTextColor(180, 0, 0)
-      doc.text('[Stamp not loaded]', pageW - margin, rightY + 8, { align: 'right' })
+      doc.text('[Stamp not loaded]', sigCx, rightY + 8, { align: 'center' })
       rightY += 16
     }
   }
 
   doc.setDrawColor(100)
   doc.setLineWidth(0.5)
-  doc.line(sigX, rightY, pageW - margin, rightY)
+  doc.line(sigX + 10, rightY, pageW - margin - 10, rightY)
   rightY += 10
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8.5)
   doc.setTextColor(10, 10, 10)
-  doc.text(`For M/S ${p.companyName}`, pageW - margin, rightY, { align: 'right' })
+  doc.text(`For M/S ${p.companyName}`, sigCx, rightY, { align: 'center' })
   rightY += 12
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(50, 50, 50)
-  doc.text('Proprietor / Authorised Signatory', pageW - margin, rightY, { align: 'right' })
+  doc.text('Proprietor / Authorised Signatory', sigCx, rightY, { align: 'center' })
   rightY += 12
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(10, 10, 10)
-  doc.text(p.authorizedSignatoryName || 'Authorised Signatory', pageW - margin, rightY, { align: 'right' })
+  doc.text(p.authorizedSignatoryName || 'Authorised Signatory', sigCx, rightY, { align: 'center' })
 
   // Page border
   doc.setDrawColor(180, 180, 180)

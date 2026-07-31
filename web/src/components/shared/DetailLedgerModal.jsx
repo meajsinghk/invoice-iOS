@@ -23,8 +23,9 @@ function Avatar({ entity, size = 56 }) {
   )
 }
 
-function AmountBadge({ amount }) {
+function AmountBadge({ amount, hideSign }) {
   const isPos = amount >= 0
+  const sign = hideSign ? '' : (isPos ? '+' : '')
   return (
     <span style={{
       padding: '3px 10px', borderRadius: 20, fontSize: 13, fontWeight: 700,
@@ -33,7 +34,7 @@ function AmountBadge({ amount }) {
       border: `1px solid ${isPos ? 'rgba(74,222,128,0.25)' : 'rgba(248,113,113,0.25)'}`,
       whiteSpace: 'nowrap',
     }}>
-      {isPos ? '+' : ''}₹{Math.abs(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+      {sign}₹{Math.abs(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
     </span>
   )
 }
@@ -143,8 +144,7 @@ export default function DetailLedgerModal({ entity, entityType, onClose, onOpenI
     setShowAddTxn(false)
   }
 
-  const inLabel = entityType === 'Client' ? 'Received' : 'Paid Out'
-  const outLabel = entityType === 'Client' ? 'Invoiced' : 'Advances'
+  // (labels now inline in JSX)
 
   return (
     <div style={{
@@ -194,29 +194,51 @@ export default function DetailLedgerModal({ entity, entityType, onClose, onOpenI
               </div>
             </div>
 
-            {/* KPI Badges */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-              {[
-                { label: 'Balance', value: balance, color: balance >= 0 ? '#4ade80' : '#f87171' },
-                { label: inLabel, value: totalIn, color: '#4ade80' },
-                { label: outLabel, value: totalOut, color: '#f87171' },
-              ].map(kpi => (
-                <div key={kpi.label} style={{
-                  background: 'rgba(255,255,255,0.05)', borderRadius: 14, padding: '10px 8px', textAlign: 'center',
-                  border: '1px solid rgba(255,255,255,0.07)',
-                }}>
-                  <div style={{
-                    fontSize: Math.max(9, 18 - Math.max(0, String(Math.round(Math.abs(kpi.value))).length - 4) * 1.5),
-                    fontWeight: 800, color: kpi.color,
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                    lineHeight: 1.2,
+            {/* KPI Badges — 2-col for Operator (no Balance), 3-col for Client */}
+            {entityType === 'Client' ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                {[
+                  { label: 'Balance', value: balance, color: balance >= 0 ? '#4ade80' : '#f87171' },
+                  { label: 'Received', value: totalIn, color: '#4ade80' },
+                  { label: 'Invoiced', value: totalOut, color: '#f87171' },
+                ].map(kpi => (
+                  <div key={kpi.label} style={{
+                    background: 'rgba(255,255,255,0.05)', borderRadius: 14, padding: '10px 8px', textAlign: 'center',
+                    border: '1px solid rgba(255,255,255,0.07)',
                   }}>
-                    ₹{Math.abs(kpi.value).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                    <div style={{
+                      fontSize: Math.max(9, 18 - Math.max(0, String(Math.round(Math.abs(kpi.value))).length - 4) * 1.5),
+                      fontWeight: 800, color: kpi.color,
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.2,
+                    }}>
+                      ₹{Math.abs(kpi.value).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                    </div>
+                    <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginTop: 3 }}>{kpi.label}</div>
                   </div>
-                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginTop: 3 }}>{kpi.label}</div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {[
+                  { label: 'Paid Out', value: totalIn, color: '#4ade80' },
+                  { label: 'Advances', value: totalOut, color: '#f87171' },
+                ].map(kpi => (
+                  <div key={kpi.label} style={{
+                    background: 'rgba(255,255,255,0.05)', borderRadius: 14, padding: '10px 12px', textAlign: 'center',
+                    border: '1px solid rgba(255,255,255,0.07)',
+                  }}>
+                    <div style={{
+                      fontSize: Math.max(9, 20 - Math.max(0, String(Math.round(Math.abs(kpi.value))).length - 4) * 1.5),
+                      fontWeight: 800, color: kpi.color,
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.2,
+                    }}>
+                      ₹{Math.abs(kpi.value).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                    </div>
+                    <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginTop: 3 }}>{kpi.label}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Add Transaction Form (inline) */}
@@ -270,7 +292,7 @@ export default function DetailLedgerModal({ entity, entityType, onClose, onOpenI
                           {entry.generatedByPerson && ` · ${entry.generatedByPerson}`}
                         </div>
                       </div>
-                      <AmountBadge amount={entry.amount} />
+                      <AmountBadge amount={entry.amount} hideSign={entityType === 'Operator'} />
                     </div>
                   )
                 })}
