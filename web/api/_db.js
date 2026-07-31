@@ -90,6 +90,24 @@ export async function ensureSchema() {
       updated_at TIMESTAMPTZ DEFAULT now()
     )
   `
+  await sql`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      phone TEXT UNIQUE NOT NULL,
+      name TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      salt TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT now()
+    )
+  `
+  await sql`
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+      token TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT now()
+    )
+  `
   ready = true
 }
 

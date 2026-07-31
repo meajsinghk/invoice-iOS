@@ -1,6 +1,7 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 
 const AUTH_KEY = 'simpleinvoice_auth'
+const API_BASE = import.meta.env.VITE_API_BASE || ''
 
 export function getAuthSession() {
   try {
@@ -15,49 +16,113 @@ export function clearAuthSession() {
   localStorage.removeItem(AUTH_KEY)
 }
 
+async function callAuth(body) {
+  const res = await fetch(`${API_BASE}/api/auth`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error || 'Request failed')
+  return data
+}
+
 export default function AuthModal({ onSuccess }) {
-  const [step, setStep] = useState('login') // 'login' | 'otp'
+  // 'checking' | 'login' | 'register'
+  const [mode, setMode] = useState('checking')
   const [phone, setPhone] = useState('')
-  const [pin, setPin] = useState('')
-  const [otp, setOtp] = useState('')
-  const [personName, setPersonName] = useState('')
-  const [otpError, setOtpError] = useState('')
-  const [loginError, setLoginError] = useState('')
+  const [password, setPassword] = useState('')
+  const [name, setName] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [dbAvailable, setDbAvailable] = useState(true)
 
-  function handleLogin(e) {
+  // On mount: check if DB has any users yet; decide login vs register
+  useEffect(() => {
+    callAuth({ action: 'check_users' })
+      .then(data => setMode(data.hasUsers ? 'login' : 'register'))
+      .catch(() => {
+        setDbAvailable(false)
+        setMode('login') // fallback — offline mode handled below
+      })
+  }, [])
+
+  // Also verify any existing stored token on mount
+  useEffect(() => {
+    const session = getAuthSession()
+    if (!session?.authToken) return
+    callAuth({ action: 'verify', token: session.authToken })
+      .then(data => {
+        if (data.valid) {
+          // Token still valid — auto-login
+          onSuccess({ authToken: session.authToken, personName: data.personName, phone: data.phone })
+        } else {
+          clearAuthSession()
+        }
+      })
+      .catch(() => {
+        // DB offline: honour cached session as-is
+        if (session?.personName) onSuccess(session)
+      })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function handleSubmit(e) {
     e.preventDefault()
-    if (phone.trim().length < 6) { setLoginError('Enter a valid phone number.'); return }
-    if (pin.trim().length < 4) { setLoginError('Enter a 4–6 digit PIN.'); return }
-    setLoginError('')
-    const derivedName = personName.trim() || `User ${phone.slice(-4)}`
-    setPersonName(derivedName)
-    setStep('otp')
+    setError('')
+
+    if (!dbAvailable) {
+      // Offline fallback: accept any phone + password (keeps old behaviour)
+      const session = {
+        authToken: 'offline-' + Date.now(),
+        personName: name.trim() || `User ${phone.slice(-4)}`,
+        phone,
+      }
+      localStorage.setItem(AUTH_KEY, JSON.stringify(session))
+      return onSuccess(session)
+    }
+
+    if (mode === 'register') {
+      if (!name.trim()) { setError('Please enter your name.'); return }
+      if (phone.trim().length < 7) { setError('Enter a valid phone number.'); return }
+      if (password.length < 4) { setError('Password must be at least 4 characters.'); return }
+      if (password !== confirmPassword) { setError('Passwords do not match.'); return }
+    } else {
+      if (phone.trim().length < 7) { setError('Enter a valid phone number.'); return }
+      if (!password) { setError('Enter your password.'); return }
+    }
+
+    setLoading(true)
+    try {
+      const data = await callAuth({
+        action: mode,
+        phone: phone.trim(),
+        password,
+        name: name.trim(),
+      })
+      const session = { authToken: data.token, personName: data.personName, phone: data.phone }
+      localStorage.setItem(AUTH_KEY, JSON.stringify(session))
+      onSuccess(session)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  function handleOtp(e) {
-    e.preventDefault()
-    const code = otp.trim()
-    if (code !== '1234' && code !== '') { setOtpError('Invalid OTP. Use 1234 for testing.'); return }
-    const session = { authToken: 'local-token-' + Date.now(), personName: personName || `User ${phone.slice(-4)}`, phone }
-    localStorage.setItem(AUTH_KEY, JSON.stringify(session))
-    onSuccess(session)
-  }
-
-  function autoComplete() {
-    setOtp('1234')
-  }
-
-  const inputStyle = {
-    width: '100%', padding: '14px 16px', borderRadius: 12, fontSize: 16,
+  const inp = {
+    width: '100%', padding: '14px 16px', borderRadius: 12, fontSize: 15,
     background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.15)',
     color: 'white', outline: 'none', boxSizing: 'border-box',
   }
-  const btnPrimary = {
+  const btn = {
     width: '100%', padding: '15px', borderRadius: 14, fontSize: 16, fontWeight: 700,
-    background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.25)',
-    color: 'white', cursor: 'pointer',
+    background: loading ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.15)',
+    border: '1px solid rgba(255,255,255,0.25)',
+    color: loading ? 'rgba(255,255,255,0.4)' : 'white',
+    cursor: loading ? 'not-allowed' : 'pointer',
   }
-  const errorStyle = { color: '#f87171', fontSize: 13, marginTop: 4 }
 
   return (
     <div style={{
@@ -73,51 +138,83 @@ export default function AuthModal({ onSuccess }) {
         borderRadius: 24, padding: '36px 28px',
         backdropFilter: 'blur(24px)',
       }}>
+        {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div style={{ fontSize: 40, marginBottom: 10 }}>🏗️</div>
+          <img src="/logo.png" alt="Milan Construction" style={{ width: 64, height: 64, borderRadius: 16, marginBottom: 10, objectFit: 'cover' }}
+            onError={e => { e.target.style.display = 'none' }} />
           <h1 style={{ fontSize: 22, fontWeight: 800, color: 'white', margin: 0 }}>Milan Construction</h1>
           <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', marginTop: 6 }}>Invoice Management System</p>
         </div>
 
-        {step === 'login' ? (
-          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <label style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', display: 'flex', flexDirection: 'column', gap: 6 }}>
-              Your Name (optional)
-              <input style={inputStyle} value={personName} onChange={e => setPersonName(e.target.value)} placeholder="e.g. Milandeep" />
-            </label>
-            <label style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', display: 'flex', flexDirection: 'column', gap: 6 }}>
-              Phone Number
-              <input style={inputStyle} type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+91 77708 55666" required />
-            </label>
-            <label style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', display: 'flex', flexDirection: 'column', gap: 6 }}>
-              PIN / Password
-              <input style={inputStyle} type="password" value={pin} onChange={e => setPin(e.target.value)} placeholder="4–6 digit PIN" maxLength={6} required />
-            </label>
-            {loginError && <p style={errorStyle}>{loginError}</p>}
-            <button type="submit" style={btnPrimary}>Continue →</button>
-          </form>
+        {mode === 'checking' ? (
+          <div style={{ textAlign: 'center', padding: '20px 0', color: 'rgba(255,255,255,0.4)', fontSize: 14 }}>
+            Connecting…
+          </div>
         ) : (
-          <form onSubmit={handleOtp} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14, textAlign: 'center', margin: 0 }}>
-              A verification code was sent to<br />
-              <span style={{ color: 'white', fontWeight: 600 }}>{phone}</span>
-            </p>
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ textAlign: 'center', marginBottom: 4 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.5)' }}>
+                {mode === 'register' ? '👤 Create Account' : '🔐 Sign In'}
+              </span>
+            </div>
+
+            {mode === 'register' && (
+              <label style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                Your Name *
+                <input style={inp} value={name} onChange={e => setName(e.target.value)}
+                  placeholder="e.g. Milandeep Virk" autoComplete="name" />
+              </label>
+            )}
+
             <label style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', display: 'flex', flexDirection: 'column', gap: 6 }}>
-              4-Digit OTP
-              <input style={{ ...inputStyle, fontSize: 24, textAlign: 'center', letterSpacing: 8 }}
-                type="text" inputMode="numeric" maxLength={4}
-                value={otp} onChange={e => setOtp(e.target.value)} placeholder="····" autoFocus />
+              Phone Number *
+              <input style={inp} type="tel" value={phone} onChange={e => setPhone(e.target.value)}
+                placeholder="+91 77708 55666" autoComplete="tel" required />
             </label>
-            {otpError && <p style={errorStyle}>{otpError}</p>}
-            <button type="submit" style={btnPrimary}>Verify & Login</button>
-            <button type="button" onClick={autoComplete}
-              style={{ ...btnPrimary, background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', fontSize: 13, color: 'rgba(255,255,255,0.4)', padding: 10 }}>
-              Auto-complete (Offline / Test)
+
+            <label style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+              Password *
+              <input style={inp} type="password" value={password} onChange={e => setPassword(e.target.value)}
+                placeholder={mode === 'register' ? 'Create a password (min 4 chars)' : 'Your password'}
+                autoComplete={mode === 'register' ? 'new-password' : 'current-password'} required />
+            </label>
+
+            {mode === 'register' && (
+              <label style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                Confirm Password *
+                <input style={inp} type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
+                  placeholder="Re-enter password" autoComplete="new-password" required />
+              </label>
+            )}
+
+            {!dbAvailable && (
+              <div style={{ fontSize: 12, color: 'rgba(255,165,0,0.8)', background: 'rgba(255,165,0,0.08)', borderRadius: 8, padding: '8px 12px', border: '1px solid rgba(255,165,0,0.15)' }}>
+                ⚠️ Database offline — signing in with local session
+              </div>
+            )}
+
+            {error && (
+              <p style={{ color: '#f87171', fontSize: 13, margin: 0, background: 'rgba(248,113,113,0.08)', padding: '8px 12px', borderRadius: 8 }}>
+                {error}
+              </p>
+            )}
+
+            <button type="submit" style={btn} disabled={loading}>
+              {loading ? 'Please wait…' : mode === 'register' ? 'Create Account →' : 'Sign In →'}
             </button>
-            <button type="button" onClick={() => setStep('login')}
-              style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.35)', fontSize: 13, cursor: 'pointer' }}>
-              ← Back
-            </button>
+
+            {mode === 'login' && (
+              <button type="button" onClick={() => { setMode('register'); setError('') }}
+                style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)', fontSize: 12, cursor: 'pointer', marginTop: -4 }}>
+                First time? Create an account
+              </button>
+            )}
+            {mode === 'register' && (
+              <button type="button" onClick={() => { setMode('login'); setError('') }}
+                style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)', fontSize: 12, cursor: 'pointer', marginTop: -4 }}>
+                Already have an account? Sign in
+              </button>
+            )}
           </form>
         )}
       </div>
