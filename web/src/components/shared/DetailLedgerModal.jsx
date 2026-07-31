@@ -160,12 +160,15 @@ export default function DetailLedgerModal({ entity, entityType, onClose, onOpenI
         height: '100%', display: 'flex', flexDirection: 'column',
         background: '#0d0d0d', overflow: 'hidden',
       }}>
-        {/* Sticky header — never scrolls */}
+        {/* Sticky header — safe-area-inset-top keeps it below status bar on all devices */}
         <div style={{
           flexShrink: 0,
           background: 'rgba(13,13,13,0.98)', backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
           borderBottom: '1px solid rgba(255,255,255,0.08)',
-          padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12,
+          paddingTop: 'max(14px, env(safe-area-inset-top, 14px))',
+          paddingBottom: 14, paddingLeft: 16, paddingRight: 16,
+          display: 'flex', alignItems: 'center', gap: 12,
         }}>
           <button onClick={onClose} style={{ color: 'rgba(255,255,255,0.5)', fontSize: 20, padding: '4px 8px', background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0 }}>←</button>
           <span style={{ fontWeight: 700, color: 'white', fontSize: 17, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
