@@ -246,7 +246,6 @@ export default function DetailLedgerModal({ entity, entityType, onClose, onOpenI
                 })}
               </div>
             )}
-                      fontSize: Math.max(9, 20 - Math.max(0, String(Math.round(Math.abs(kpi.value))).length - 4) * 1.5),
           </div>
 
           {/* Add Transaction Form (inline) */}

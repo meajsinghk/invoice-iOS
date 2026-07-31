@@ -38,4 +38,6 @@ export const api = {
 
   fetchCompanyProfile: () => request('company-profile'),
   saveCompanyProfile: (profile) => request('company-profile', { method: 'POST', body: JSON.stringify(profile) }),
+
+  resetAllData: () => request('reset', { method: 'POST' }),
 }

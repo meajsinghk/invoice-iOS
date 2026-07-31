@@ -4,10 +4,12 @@ import Modal from '../ui/Modal'
 import '../ui/forms.css'
 
 export default function CompanyProfileSheet({ onClose }) {
-  const { state, dispatch } = useStore()
+  const { state, dispatch, resetAll } = useStore()
   const p = state.companyProfile || {}
 
   const [form, setForm] = useState({ ...p })
+  const [confirmReset, setConfirmReset] = useState(false)
+  const [resetting, setResetting] = useState(false)
 
   function set(key) {
     return e => setForm(f => ({ ...f, [key]: e.target.value }))
@@ -15,6 +17,15 @@ export default function CompanyProfileSheet({ onClose }) {
 
   function handleSave() {
     dispatch({ type: 'UPDATE_COMPANY_PROFILE', payload: form })
+    onClose()
+  }
+
+  async function handleReset() {
+    if (!confirmReset) { setConfirmReset(true); return }
+    setResetting(true)
+    await resetAll()
+    setResetting(false)
+    setConfirmReset(false)
     onClose()
   }
 
@@ -94,6 +105,33 @@ export default function CompanyProfileSheet({ onClose }) {
         >
           Save Profile
         </button>
+
+        {/* Danger zone */}
+        <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid rgba(255,60,60,0.2)' }}>
+          <div style={{ color: 'rgba(255,100,100,0.6)', fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>
+            Danger Zone
+          </div>
+          {confirmReset ? (
+            <div style={{ background: 'rgba(255,60,60,0.08)', border: '1px solid rgba(255,60,60,0.3)', borderRadius: 12, padding: '14px 16px', textAlign: 'center' }}>
+              <p style={{ color: '#f87171', margin: '0 0 12px', fontSize: 14, fontWeight: 600 }}>
+                ⚠️ This will permanently delete ALL clients, operators, invoices, and transactions. Company profile is kept. This cannot be undone.
+              </p>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={() => setConfirmReset(false)} style={{ flex: 1, padding: '10px', borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', color: 'white', fontSize: 14, fontWeight: 600 }}>
+                  Cancel
+                </button>
+                <button onClick={handleReset} disabled={resetting} style={{ flex: 1, padding: '10px', borderRadius: 10, background: 'rgba(255,60,60,0.25)', border: '1px solid rgba(255,60,60,0.5)', color: '#f87171', fontSize: 14, fontWeight: 700 }}>
+                  {resetting ? 'Resetting…' : '🗑️ Yes, Delete All'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={handleReset} style={{ width: '100%', padding: '12px', borderRadius: 12, background: 'rgba(255,60,60,0.08)', border: '1px solid rgba(255,60,60,0.25)', color: '#f87171', fontSize: 14, fontWeight: 600 }}>
+              🗑️ Reset All App Data
+            </button>
+          )}
+        </div>
+
       </div>
     </Modal>
   )

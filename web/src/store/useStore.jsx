@@ -122,6 +122,9 @@ function reducer(state, action) {
     case 'UPDATE_COMPANY_PROFILE':
       return { ...state, companyProfile: { ...state.companyProfile, ...action.payload } }
 
+    case 'RESET_ALL':
+      return { ...initialState, companyProfile: state.companyProfile }
+
     default: return state
   }
 }
@@ -233,8 +236,17 @@ export function StoreProvider({ children }) {
     }
   }
 
+  async function resetAll() {
+    // Wipe remote DB (best-effort)
+    try { await api.resetAllData() } catch (err) { console.warn('[reset] Remote wipe failed:', err.message) }
+    // Clear local storage
+    try { localStorage.removeItem(STORAGE_KEY) } catch {}
+    // Reset in-memory state (keep company profile)
+    dispatch({ type: 'RESET_ALL' })
+  }
+
   return (
-    <StoreContext.Provider value={{ state, dispatch: syncedDispatch, dbConnected }}>
+    <StoreContext.Provider value={{ state, dispatch: syncedDispatch, dbConnected, resetAll }}>
       {children}
     </StoreContext.Provider>
   )
