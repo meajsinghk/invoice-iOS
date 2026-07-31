@@ -210,6 +210,23 @@ export async function generateInvoicePDF(invoice, companyProfile = {}) {
   doc.text(`Amount in Words: ${numberToWords(invoice.grandTotal)} Only`, margin, y)
   y += 20
 
+  // Notes / Remarks
+  if (invoice.notes && invoice.notes.trim()) {
+    doc.setFontSize(8.5)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(10, 10, 10)
+    doc.text('NOTES / REMARKS:', margin, y)
+    y += 12
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(50, 50, 50)
+    const noteLines = doc.splitTextToSize(invoice.notes.trim(), pageW - margin * 2)
+    noteLines.forEach(line => {
+      doc.text(line, margin, y)
+      y += 11
+    })
+    y += 4
+  }
+
   doc.setDrawColor(200, 200, 200)
   doc.setLineWidth(0.5)
   doc.line(margin, y, pageW - margin, y)
