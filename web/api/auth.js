@@ -1,6 +1,35 @@
 import { sql, ensureSchema } from './_db.js'
 import { scryptSync, randomBytes, timingSafeEqual } from 'crypto'
 
+// ── WHITELIST ─────────────────────────────────────────────────────────────────
+// Only these phone numbers and emails are permitted to register or log in.
+// Phones are stored/matched without country code prefix.
+const ALLOWED_PHONES = new Set([
+  '7770855666',
+  '6475408800',
+  '9098815367',
+])
+
+const ALLOWED_EMAILS = new Set([
+  'virk.milan006@gmail.com',
+  'amarjot.johal@yahoo.com',
+  'johalamrit30@gmail.com',
+])
+
+function normalizePhone(raw = '') {
+  // Strip spaces, dashes, parentheses, leading + and country code (91)
+  let p = raw.replace(/[\s\-().+]/g, '')
+  if (p.startsWith('91') && p.length === 12) p = p.slice(2)
+  return p
+}
+
+function isAllowed(phoneRaw = '', emailRaw = '') {
+  const phone = normalizePhone(phoneRaw)
+  const email = (emailRaw || '').trim().toLowerCase()
+  return ALLOWED_PHONES.has(phone) || ALLOWED_EMAILS.has(email)
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 function hashPassword(password, salt) {
   return scryptSync(password, salt, 64).toString('hex')
 }
@@ -28,7 +57,7 @@ export default async function handler(req, res) {
     return res.status(503).json({ error: 'Database unavailable: ' + err.message })
   }
 
-  const { action, phone, password, name } = req.body || {}
+  const { action, phone, password, name, email } = req.body || {}
 
   // ── check_users: does any user exist yet? ─────────────────────────────
   if (action === 'check_users') {
@@ -46,6 +75,10 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Phone, name and password are required.' })
     if (password.length < 4)
       return res.status(400).json({ error: 'Password must be at least 4 characters.' })
+
+    // Whitelist check — must match phone OR email
+    if (!isAllowed(phone, email))
+      return res.status(403).json({ error: 'Access denied. This phone number or email is not authorised to use this app.' })
 
     try {
       const existing = await sql`SELECT id FROM users WHERE phone = ${phone.trim()}`
@@ -79,6 +112,10 @@ export default async function handler(req, res) {
   if (action === 'login') {
     if (!phone || !password)
       return res.status(400).json({ error: 'Phone and password are required.' })
+
+    // Whitelist check — prevents locked-out accounts from being brute-forced
+    if (!isAllowed(phone, ''))
+      return res.status(403).json({ error: 'Access denied. This phone number is not authorised to use this app.' })
 
     try {
       const rows = await sql`SELECT * FROM users WHERE phone = ${phone.trim()}`

@@ -68,12 +68,21 @@ export default function AuthModal({ onSuccess }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const [email, setEmail] = useState('')
+
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
 
     if (!dbAvailable) {
-      // Offline fallback: accept any phone + password (keeps old behaviour)
+      // Offline: still enforce whitelist client-side
+      const ALLOWED_PHONES = ['7770855666', '6475408800', '9098815367']
+      const ALLOWED_EMAILS = ['virk.milan006@gmail.com', 'amarjot.johal@yahoo.com', 'johalamrit30@gmail.com']
+      const normPhone = phone.replace(/[\s\-().+]/g, '').replace(/^91(\d{10})$/, '$1')
+      if (!ALLOWED_PHONES.includes(normPhone) && !ALLOWED_EMAILS.includes(email.trim().toLowerCase())) {
+        setError('Access denied. This phone number or email is not authorised.')
+        return
+      }
       const session = {
         authToken: 'offline-' + Date.now(),
         personName: name.trim() || `User ${phone.slice(-4)}`,
@@ -98,6 +107,7 @@ export default function AuthModal({ onSuccess }) {
       const data = await callAuth({
         action: mode,
         phone: phone.trim(),
+        email: email.trim(),
         password,
         name: name.trim(),
       })
@@ -171,6 +181,14 @@ export default function AuthModal({ onSuccess }) {
               <input style={inp} type="tel" value={phone} onChange={e => setPhone(e.target.value)}
                 placeholder="+91 77708 55666" autoComplete="tel" required />
             </label>
+
+            {mode === 'register' && (
+              <label style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                Email (optional — used for access verification)
+                <input style={inp} type="email" value={email} onChange={e => setEmail(e.target.value)}
+                  placeholder="yourname@email.com" autoComplete="email" />
+              </label>
+            )}
 
             <label style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', display: 'flex', flexDirection: 'column', gap: 6 }}>
               Password *
