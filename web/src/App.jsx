@@ -3,7 +3,6 @@ import { StoreProvider, useStore } from './store/useStore'
 import FloatingTabBar from './components/FloatingTabBar'
 import ClientsView from './components/clients/ClientsView'
 import OperatorsView from './components/operators/OperatorsView'
-import WorkRatesView from './components/rates/WorkRatesView'
 import QuickInvoiceSheet from './components/invoice/QuickInvoiceSheet'
 import InvoiceDatabaseSheet from './components/database/InvoiceDatabaseSheet'
 import CompanyProfileSheet from './components/company/CompanyProfileSheet'
@@ -33,7 +32,7 @@ function SyncStatus() {
   )
 }
 
-const TAB_TITLES = { clients: 'Clients', operators: 'Operators', rates: 'Work Rates' }
+const TAB_TITLES = { clients: 'Clients', operators: 'Operators' }
 
 function AppInner({ currentUser }) {
   const [activeTab, setActiveTab] = useState('clients')
@@ -60,7 +59,6 @@ function AppInner({ currentUser }) {
       <main className="app-main">
         {activeTab === 'clients' && <ClientsView currentUser={currentUser} />}
         {activeTab === 'operators' && <OperatorsView currentUser={currentUser} />}
-        {activeTab === 'rates' && <WorkRatesView />}
       </main>
 
       <FloatingTabBar

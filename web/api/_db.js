@@ -18,6 +18,19 @@ export async function ensureSchema() {
       address TEXT DEFAULT '',
       gstin TEXT DEFAULT '',
       pan_number TEXT DEFAULT '',
+      avatar_url TEXT DEFAULT '',
+      updated_at TIMESTAMPTZ DEFAULT now()
+    )
+  `
+  await sql`ALTER TABLE clients ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT ''`
+  await sql`
+    CREATE TABLE IF NOT EXISTS operators (
+      id UUID PRIMARY KEY,
+      name TEXT NOT NULL,
+      phone TEXT DEFAULT '',
+      address TEXT DEFAULT '',
+      pan_number TEXT DEFAULT '',
+      avatar_url TEXT DEFAULT '',
       updated_at TIMESTAMPTZ DEFAULT now()
     )
   `
@@ -50,6 +63,23 @@ export async function ensureSchema() {
       status TEXT DEFAULT 'Draft',
       pdf_filename TEXT DEFAULT '',
       pdf_base64 TEXT,
+      generated_by TEXT DEFAULT '',
+      updated_at TIMESTAMPTZ DEFAULT now()
+    )
+  `
+  await sql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS generated_by TEXT DEFAULT ''`
+  await sql`
+    CREATE TABLE IF NOT EXISTS ledger_entries (
+      id UUID PRIMARY KEY,
+      timestamp TIMESTAMPTZ NOT NULL,
+      transaction_type TEXT NOT NULL,
+      amount NUMERIC NOT NULL,
+      note_description TEXT DEFAULT '',
+      generated_by_person TEXT DEFAULT '',
+      entity_type TEXT NOT NULL,
+      entity_id UUID NOT NULL,
+      invoice_pdf_url TEXT DEFAULT '',
+      line_items JSONB DEFAULT '[]',
       updated_at TIMESTAMPTZ DEFAULT now()
     )
   `
@@ -67,6 +97,15 @@ export function toClient(row) {
   return {
     id: row.id, name: row.name, email: row.email || '', phone: row.phone || '',
     address: row.address || '', gstin: row.gstin || '', panNumber: row.pan_number || '',
+    avatarUrl: row.avatar_url || '',
+  }
+}
+
+export function toOperator(row) {
+  return {
+    id: row.id, name: row.name, phone: row.phone || '',
+    address: row.address || '', panNumber: row.pan_number || '',
+    avatarUrl: row.avatar_url || '',
   }
 }
 
@@ -85,5 +124,21 @@ export function toInvoice(row) {
     lineItems: row.line_items || [], subtotal: Number(row.subtotal) || 0, taxTotal: Number(row.tax_total) || 0,
     grandTotal: Number(row.grand_total) || 0, signatureDataUrl: row.signature_data_url || null,
     status: row.status || 'Draft', pdfFilename: row.pdf_filename || '', pdfBase64: row.pdf_base64 || null,
+    generatedByPerson: row.generated_by || '',
+  }
+}
+
+export function toLedgerEntry(row) {
+  return {
+    id: row.id,
+    timestamp: row.timestamp,
+    transactionType: row.transaction_type,
+    amount: Number(row.amount),
+    noteDescription: row.note_description || '',
+    generatedByPerson: row.generated_by_person || '',
+    entityType: row.entity_type,
+    entityId: row.entity_id,
+    invoicePDFUrl: row.invoice_pdf_url || '',
+    lineItems: row.line_items || [],
   }
 }

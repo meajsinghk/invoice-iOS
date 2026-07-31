@@ -3,7 +3,7 @@ import { useStore } from '../../store/useStore'
 import StatusBadge from '../ui/StatusBadge'
 import FilterChip from '../ui/FilterChip'
 
-const STATUS_CYCLE = { Draft: 'Sent', Sent: 'Paid', Paid: 'Draft' }
+const STATUS_CYCLE = { Draft: 'Sent', Sent: 'Received', Received: 'Draft' }
 
 function getTimeRangeBounds(timeRange) {
   const now = new Date()
@@ -32,23 +32,44 @@ export default function InvoiceArchive({ timeRange = 'All Time', searchQuery = '
     .sort((a, b) => new Date(b.dateCreated) - new Date(a.dateCreated))
 
   function cycleStatus(invoice) {
-    dispatch({ type: 'UPDATE_INVOICE', payload: { ...invoice, status: STATUS_CYCLE[invoice.status] || 'Draft' } })
+    const nextStatus = STATUS_CYCLE[invoice.status] || 'Draft'
+    dispatch({ type: 'UPDATE_INVOICE', payload: { ...invoice, status: nextStatus } })
   }
 
   function downloadPDF(invoice) {
     if (!invoice.pdfBase64) return
-    const a = document.createElement('a')
-    a.href = invoice.pdfBase64
-    a.download = invoice.pdfFilename || `${invoice.invoiceNumber}.pdf`
-    a.click()
+    // Convert data URL to blob for reliable cross-browser download
+    try {
+      const byteStr = atob(invoice.pdfBase64.split(',')[1])
+      const ab = new ArrayBuffer(byteStr.length)
+      const ia = new Uint8Array(ab)
+      for (let i = 0; i < byteStr.length; i++) ia[i] = byteStr.charCodeAt(i)
+      const blob = new Blob([ab], { type: 'application/pdf' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = invoice.pdfFilename || `${invoice.invoiceNumber}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch {
+      // Fallback: direct data URL
+      const a = document.createElement('a')
+      a.href = invoice.pdfBase64
+      a.download = invoice.pdfFilename || `${invoice.invoiceNumber}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+    }
   }
 
-  const statusColor = s => s === 'Paid' ? '#4ade80' : s === 'Sent' ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.3)'
+  const statusAccent = s => s === 'Received' || s === 'Paid' ? '#4ade80' : s === 'Sent' ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)'
 
   return (
     <div>
       <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 10, marginBottom: 12, scrollbarWidth: 'none' }}>
-        {['All', 'Draft', 'Sent', 'Paid'].map(s => (
+        {['All', 'Draft', 'Sent', 'Received'].map(s => (
           <FilterChip key={s} label={s} active={filter === s} onClick={() => setFilter(s)} />
         ))}
       </div>
@@ -59,23 +80,23 @@ export default function InvoiceArchive({ timeRange = 'All Time', searchQuery = '
           <p>{filter === 'All' ? 'No invoices found' : `No ${filter} invoices`}</p>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {filtered.map(invoice => (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {filtered.map((invoice, idx) => (
             <div key={invoice.id} style={{
-              background: 'rgba(255,255,255,0.04)',
+              background: idx % 2 === 0 ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.02)',
               borderRadius: 14, padding: '14px 16px',
-              border: '1px solid rgba(255,255,255,0.08)',
+              border: '1px solid rgba(255,255,255,0.07)',
             }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                 <div style={{
-                  width: 3, borderRadius: 4,
-                  background: statusColor(invoice.status),
-                  alignSelf: 'stretch', flexShrink: 0,
+                  width: 3, minHeight: 48, borderRadius: 4,
+                  background: statusAccent(invoice.status),
+                  flexShrink: 0,
                 }} />
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
                     <span style={{ fontWeight: 700, fontSize: 14, color: 'white' }}>{invoice.invoiceNumber}</span>
-                    <span style={{ fontWeight: 700, fontSize: 15, color: 'rgba(255,255,255,0.9)' }}>Rs.{invoice.grandTotal?.toFixed(2)}</span>
+                    <span style={{ fontWeight: 700, fontSize: 15, color: 'white' }}>Rs.{invoice.grandTotal?.toFixed(2)}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>{invoice.clientName}</span>
@@ -83,23 +104,24 @@ export default function InvoiceArchive({ timeRange = 'All Time', searchQuery = '
                   </div>
                   <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 4 }}>
                     {new Date(invoice.dateCreated).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    {invoice.generatedByPerson && ` · ${invoice.generatedByPerson}`}
                   </div>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: 6, marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ display: 'flex', gap: 6, marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
                 {invoice.pdfBase64 && (
                   <button onClick={() => downloadPDF(invoice)}
-                    style={{ padding: '5px 12px', borderRadius: 7, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                    PDF
+                    style={{ padding: '5px 12px', borderRadius: 7, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                    ⬇ PDF
                   </button>
                 )}
                 <button onClick={() => cycleStatus(invoice)}
-                  style={{ padding: '5px 12px', borderRadius: 7, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                  → {STATUS_CYCLE[invoice.status]}
+                  style={{ padding: '5px 12px', borderRadius: 7, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                  → {STATUS_CYCLE[invoice.status] || 'Draft'}
                 </button>
                 <button onClick={() => dispatch({ type: 'DELETE_INVOICE', payload: invoice.id })}
-                  style={{ padding: '5px 12px', borderRadius: 7, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171', fontSize: 12, fontWeight: 600, marginLeft: 'auto', cursor: 'pointer' }}>
+                  style={{ padding: '5px 12px', borderRadius: 7, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171', fontSize: 12, fontWeight: 600, marginLeft: 'auto', cursor: 'pointer' }}>
                   Delete
                 </button>
               </div>

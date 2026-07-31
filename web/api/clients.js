@@ -13,12 +13,12 @@ export default async function handler(req, res) {
       const c = req.body
       if (!c || !c.id || !c.name) return res.status(400).json({ error: 'Missing id or name' })
       await sql`
-        INSERT INTO clients (id, name, email, phone, address, gstin, pan_number, updated_at)
-        VALUES (${c.id}, ${c.name}, ${c.email || ''}, ${c.phone || ''}, ${c.address || ''}, ${c.gstin || ''}, ${c.panNumber || ''}, now())
+        INSERT INTO clients (id, name, email, phone, address, gstin, pan_number, avatar_url, updated_at)
+        VALUES (${c.id}, ${c.name}, ${c.email || ''}, ${c.phone || ''}, ${c.address || ''}, ${c.gstin || ''}, ${c.panNumber || ''}, ${c.avatarUrl || ''}, now())
         ON CONFLICT (id) DO UPDATE SET
           name = EXCLUDED.name, email = EXCLUDED.email, phone = EXCLUDED.phone,
           address = EXCLUDED.address, gstin = EXCLUDED.gstin, pan_number = EXCLUDED.pan_number,
-          updated_at = now()
+          avatar_url = EXCLUDED.avatar_url, updated_at = now()
       `
       return res.status(200).json({ ok: true })
     }

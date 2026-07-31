@@ -12,20 +12,19 @@
 
 .tab-bar {
   display: grid;
-  grid-template-columns: 1fr 1fr 56px 1fr;
+  grid-template-columns: 1fr 64px 1fr;
   align-items: center;
-  padding: 10px 24px;
-  background: rgba(18,18,18,0.90);
+  padding: 10px 20px;
+  background: rgba(18,18,18,0.92);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border: 1px solid rgba(255,255,255,0.12);
   border-radius: 100px;
   box-shadow: 0 8px 40px rgba(0,0,0,0.7);
   width: 100%;
-  max-width: 420px;
+  max-width: 360px;
   pointer-events: all;
   position: relative;
-  gap: 4px;
 }
 
 .tab-btn {
@@ -53,7 +52,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-top: -24px;
+  margin-top: -20px;
 }
 
 .plus-btn {

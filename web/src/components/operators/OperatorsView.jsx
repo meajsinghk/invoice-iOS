@@ -39,8 +39,8 @@ export default function OperatorsView({ currentUser }) {
         </div>
       ) : (
         <div className="card-list">
-          {filtered.map(op => (
-            <OperatorCard key={op.id} operator={op} onOpenLedger={() => setLedgerOperator(op)} />
+          {filtered.map((op, idx) => (
+            <OperatorCard key={op.id} operator={op} index={idx} onOpenLedger={() => setLedgerOperator(op)} />
           ))}
         </div>
       )}

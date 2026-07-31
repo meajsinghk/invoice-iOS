@@ -20,6 +20,10 @@ export const api = {
   saveClient: (client) => request('clients', { method: 'POST', body: JSON.stringify(client) }),
   deleteClient: (id) => request(`clients?id=${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
+  fetchOperators: () => request('operators'),
+  saveOperator: (op) => request('operators', { method: 'POST', body: JSON.stringify(op) }),
+  deleteOperator: (id) => request(`operators?id=${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
   fetchWorkRates: () => request('work-rates'),
   saveWorkRate: (rate) => request('work-rates', { method: 'POST', body: JSON.stringify(rate) }),
   deleteWorkRate: (id) => request(`work-rates?id=${encodeURIComponent(id)}`, { method: 'DELETE' }),
@@ -27,6 +31,10 @@ export const api = {
   fetchInvoices: () => request('invoices'),
   saveInvoice: (invoice) => request('invoices', { method: 'POST', body: JSON.stringify(invoice) }),
   deleteInvoice: (id) => request(`invoices?id=${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  fetchLedgerEntries: () => request('ledger-entries'),
+  saveLedgerEntry: (entry) => request('ledger-entries', { method: 'POST', body: JSON.stringify(entry) }),
+  deleteLedgerEntry: (id) => request(`ledger-entries?id=${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
   fetchCompanyProfile: () => request('company-profile'),
   saveCompanyProfile: (profile) => request('company-profile', { method: 'POST', body: JSON.stringify(profile) }),

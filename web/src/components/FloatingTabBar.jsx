@@ -13,14 +13,6 @@ export default function FloatingTabBar({ activeTab, onTabChange, onPlus }) {
           <span className="tab-label">Clients</span>
         </button>
 
-        <button
-          className={`tab-btn ${activeTab === 'operators' ? 'active' : ''}`}
-          onClick={() => onTabChange('operators')}
-        >
-          <span className="tab-icon">🔧</span>
-          <span className="tab-label">Operators</span>
-        </button>
-
         <div className="tab-bar-center">
           <button className="plus-btn" onClick={onPlus} title="New Entry">
             <span className="plus-icon">+</span>
@@ -28,13 +20,14 @@ export default function FloatingTabBar({ activeTab, onTabChange, onPlus }) {
         </div>
 
         <button
-          className={`tab-btn ${activeTab === 'rates' ? 'active' : ''}`}
-          onClick={() => onTabChange('rates')}
+          className={`tab-btn ${activeTab === 'operators' ? 'active' : ''}`}
+          onClick={() => onTabChange('operators')}
         >
-          <span className="tab-icon">💰</span>
-          <span className="tab-label">Rates</span>
+          <span className="tab-icon">🔧</span>
+          <span className="tab-label">Operators</span>
         </button>
       </div>
     </div>
   )
 }
+

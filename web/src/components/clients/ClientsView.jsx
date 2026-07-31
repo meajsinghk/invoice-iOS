@@ -38,8 +38,8 @@ export default function ClientsView({ currentUser }) {
         </div>
       ) : (
         <div className="card-list">
-          {filtered.map(client => (
-            <ClientCard key={client.id} client={client} onOpenLedger={() => setLedgerClient(client)} />
+          {filtered.map((client, idx) => (
+            <ClientCard key={client.id} client={client} index={idx} onOpenLedger={() => setLedgerClient(client)} />
           ))}
         </div>
       )}

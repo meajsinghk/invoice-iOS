@@ -22,7 +22,7 @@ const defaultCompanyProfile = {
     'Goods once sold will not be taken back.',
   ],
   authorizedSignatoryName: 'Milandeep Virk',
-  stampImageUrl: '',
+  stampImageUrl: '/stamp.png',
 }
 
 const initialState = {
@@ -36,7 +36,28 @@ const initialState = {
 
 function reducer(state, action) {
   switch (action.type) {
-    case 'LOAD': return action.payload
+    // LOAD merges DB data while preserving keys not returned by DB (e.g. pdfBase64 from localStorage)
+    case 'LOAD': {
+      const incoming = action.payload
+      // Merge invoices: prefer incoming but keep pdfBase64 from local if DB version missing it
+      const localInvoiceMap = {}
+      ;(state.invoices || []).forEach(i => { localInvoiceMap[i.id] = i })
+      const mergedInvoices = (incoming.invoices || state.invoices || []).map(inv => ({
+        ...inv,
+        pdfBase64: inv.pdfBase64 || (localInvoiceMap[inv.id] && localInvoiceMap[inv.id].pdfBase64) || null,
+      }))
+      return {
+        ...state,
+        clients: incoming.clients ?? state.clients,
+        operators: incoming.operators ?? state.operators,
+        workRates: incoming.workRates ?? state.workRates,
+        invoices: mergedInvoices,
+        ledgerEntries: incoming.ledgerEntries ?? state.ledgerEntries,
+        companyProfile: incoming.companyProfile
+          ? { ...defaultCompanyProfile, ...incoming.companyProfile }
+          : state.companyProfile,
+      }
+    }
 
     case 'ADD_CLIENT':
       return { ...state, clients: [...state.clients, action.payload] }
@@ -82,9 +103,6 @@ function reducer(state, action) {
 
 const StoreContext = createContext(null)
 
-// Maps a reducer action to the matching background sync call to the
-// Postgres-backed API. Errors are swallowed by the caller — localStorage
-// always remains the source of truth for offline/DB-unavailable use.
 function syncActionToRemote(action, priorState) {
   switch (action.type) {
     case 'ADD_CLIENT':
@@ -92,6 +110,12 @@ function syncActionToRemote(action, priorState) {
       return api.saveClient(action.payload)
     case 'DELETE_CLIENT':
       return api.deleteClient(action.payload)
+
+    case 'ADD_OPERATOR':
+    case 'UPDATE_OPERATOR':
+      return api.saveOperator(action.payload)
+    case 'DELETE_OPERATOR':
+      return api.deleteOperator(action.payload)
 
     case 'ADD_WORK_RATE':
     case 'UPDATE_WORK_RATE':
@@ -104,6 +128,12 @@ function syncActionToRemote(action, priorState) {
       return api.saveInvoice(action.payload)
     case 'DELETE_INVOICE':
       return api.deleteInvoice(action.payload)
+
+    case 'ADD_LEDGER_ENTRY':
+    case 'UPDATE_LEDGER_ENTRY':
+      return api.saveLedgerEntry(action.payload)
+    case 'DELETE_LEDGER_ENTRY':
+      return api.deleteLedgerEntry(action.payload)
 
     case 'UPDATE_COMPANY_PROFILE':
       return api.saveCompanyProfile({ ...priorState.companyProfile, ...action.payload })
@@ -125,19 +155,25 @@ export function StoreProvider({ children }) {
     } catch {}
 
     // 2. Then try the remote Postgres-backed API in the background.
-    //    If it's reachable, treat it as the source of truth and mirror
-    //    it into localStorage as a backup. If not configured / offline,
-    //    fail silently and keep using localStorage only.
     ;(async () => {
       try {
-        const [clients, workRates, invoices, companyProfile] = await Promise.all([
-          api.fetchClients(), api.fetchWorkRates(), api.fetchInvoices(), api.fetchCompanyProfile(),
+        const [clients, operators, workRates, invoices, ledgerEntries, companyProfile] = await Promise.all([
+          api.fetchClients(),
+          api.fetchOperators(),
+          api.fetchWorkRates(),
+          api.fetchInvoices(),
+          api.fetchLedgerEntries(),
+          api.fetchCompanyProfile(),
         ])
         setDbConnected(true)
         dispatch({
           type: 'LOAD',
           payload: {
-            clients, workRates, invoices,
+            clients,
+            operators,
+            workRates,
+            invoices,
+            ledgerEntries,
             companyProfile: companyProfile || defaultCompanyProfile,
           },
         })
@@ -148,15 +184,13 @@ export function StoreProvider({ children }) {
     })()
   }, [])
 
-  // Always mirror state to localStorage as a backup, regardless of DB status.
+  // Always mirror state to localStorage as a backup.
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
     } catch {}
   }, [state])
 
-  // Wrapped dispatch: applies the local reducer update immediately, then
-  // fires a background sync to the remote DB (best-effort, non-blocking).
   function syncedDispatch(action) {
     dispatch(action)
     const remoteCall = syncActionToRemote(action, state)

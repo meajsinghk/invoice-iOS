@@ -1,31 +1,32 @@
 import React from 'react'
 
-export default function OperatorCard({ operator, onOpenLedger }) {
+export default function OperatorCard({ operator, onOpenLedger, index = 0 }) {
   const initials = (operator.name || '?').trim().charAt(0).toUpperCase()
+  const isEven = index % 2 === 0
 
   return (
     <div
       onClick={onOpenLedger}
       style={{
-        background: 'rgba(255,255,255,0.05)',
-        borderRadius: 16, padding: 16,
-        border: '1px solid rgba(255,255,255,0.10)',
+        background: isEven ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.03)',
+        borderRadius: 16, padding: '14px 16px',
+        border: isEven ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(255,255,255,0.06)',
         display: 'flex', alignItems: 'center', gap: 14,
         cursor: 'pointer', transition: 'background 0.15s',
       }}
-      onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
-      onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+      onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.10)'}
+      onMouseLeave={e => e.currentTarget.style.background = isEven ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.03)'}
     >
       {operator.avatarUrl ? (
         <img src={operator.avatarUrl} alt={operator.name}
-          style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: '1px solid rgba(255,255,255,0.14)' }} />
+          style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: '2px solid rgba(255,255,255,0.18)' }} />
       ) : (
         <div style={{
           width: 48, height: 48, borderRadius: '50%', flexShrink: 0,
-          background: 'rgba(255,255,255,0.10)',
-          border: '1px solid rgba(255,255,255,0.14)',
+          background: isEven ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.08)',
+          border: '2px solid rgba(255,255,255,0.18)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 20, fontWeight: 700, color: 'rgba(255,255,255,0.85)',
+          fontSize: 20, fontWeight: 700, color: 'white',
         }}>{initials}</div>
       )}
 
@@ -38,7 +39,7 @@ export default function OperatorCard({ operator, onOpenLedger }) {
         )}
       </div>
 
-      <div style={{ color: 'rgba(255,255,255,0.2)', fontSize: 18 }}>›</div>
+      <div style={{ color: 'rgba(255,255,255,0.25)', fontSize: 18 }}>›</div>
     </div>
   )
 }

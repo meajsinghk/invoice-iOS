@@ -39,7 +39,7 @@ export default function InvoiceDatabaseSheet({ onClose }) {
         </div>
 
         {/* Time Range Filter */}
-        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '0 16px 12px', scrollbarWidth: 'none' }}>
+        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '12px 16px', scrollbarWidth: 'none', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
           {TIME_RANGES.map(r => (
             <button key={r} onClick={() => setTimeRange(r)} style={{
               padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap',
