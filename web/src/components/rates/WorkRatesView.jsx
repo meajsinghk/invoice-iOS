@@ -12,7 +12,7 @@ export default function WorkRatesView() {
 
   const filtered = state.workRates.filter(r =>
     r.title.toLowerCase().includes(search.toLowerCase()) ||
-    r.hsnCode.toLowerCase().includes(search.toLowerCase())
+    (r.hsnCode || '').toLowerCase().includes(search.toLowerCase())
   ).sort((a, b) => a.title.localeCompare(b.title))
 
   return (

@@ -8,13 +8,30 @@ export default function CompanyProfileSheet({ onClose }) {
   const p = state.companyProfile || {}
 
   const [form, setForm] = useState({ ...p })
+  const [terms, setTerms] = useState(
+    Array.isArray(p.termsAndConditions) && p.termsAndConditions.length > 0
+      ? [...p.termsAndConditions]
+      : ['Certified that the particulars given above are true and correct.', 'E.&O.E.', 'Subject to Gwalior jurisdiction only.', 'Goods once sold will not be taken back.']
+  )
 
   function set(key) {
     return e => setForm(f => ({ ...f, [key]: e.target.value }))
   }
 
+  function updateTerm(idx, value) {
+    setTerms(prev => prev.map((t, i) => i === idx ? value : t))
+  }
+
+  function addTerm() {
+    setTerms(prev => [...prev, ''])
+  }
+
+  function removeTerm(idx) {
+    setTerms(prev => prev.filter((_, i) => i !== idx))
+  }
+
   function handleSave() {
-    dispatch({ type: 'UPDATE_COMPANY_PROFILE', payload: form })
+    dispatch({ type: 'UPDATE_COMPANY_PROFILE', payload: { ...form, termsAndConditions: terms.filter(t => t.trim()) } })
     onClose()
   }
 
@@ -86,6 +103,33 @@ export default function CompanyProfileSheet({ onClose }) {
         <label className="form-label">Authorised Signatory Name
           <input className="form-input" value={form.authorizedSignatoryName || ''} onChange={set('authorizedSignatoryName')} placeholder="e.g. Milandeep Virk" />
         </label>
+
+        <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', paddingBottom: 4, borderBottom: '1px solid rgba(255,255,255,0.08)', marginTop: 4 }}>
+          Terms & Conditions
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {terms.map((term, idx) => (
+            <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12, minWidth: 18 }}>{idx + 1}.</span>
+              <input
+                className="form-input"
+                value={term}
+                onChange={e => updateTerm(idx, e.target.value)}
+                placeholder={`Term ${idx + 1}`}
+                style={{ flex: 1 }}
+              />
+              <button
+                onClick={() => removeTerm(idx)}
+                style={{ padding: '4px 8px', borderRadius: 6, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171', fontSize: 13, flexShrink: 0 }}
+              >✕</button>
+            </div>
+          ))}
+          <button
+            onClick={addTerm}
+            style={{ padding: '8px 14px', borderRadius: 8, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: 600, alignSelf: 'flex-start' }}
+          >+ Add Term</button>
+        </div>
 
         <button
           className="btn-primary"

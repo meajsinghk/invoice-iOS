@@ -17,6 +17,7 @@ export default function QuickInvoiceSheet({ onClose }) {
   const [clientGSTIN, setClientGSTIN] = useState('')
   const [clientPhone, setClientPhone] = useState('')
   const [clientPAN, setClientPAN] = useState('')
+  const [notes, setNotes] = useState('')
   const [lineItems, setLineItems] = useState([])
   const [signatureDataUrl, setSignatureDataUrl] = useState(null)
   const [showAddItem, setShowAddItem] = useState(false)
@@ -24,6 +25,7 @@ export default function QuickInvoiceSheet({ onClose }) {
   const [success, setSuccess] = useState(false)
   const [lastPdfBlob, setLastPdfBlob] = useState(null)
   const [lastInvoiceNum, setLastInvoiceNum] = useState('')
+  const [lastGrandTotal, setLastGrandTotal] = useState(0)
 
   const subtotal = lineItems.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
   const taxTotal = lineItems.reduce((s, i) => { const sub = i.quantity * i.unitPrice; return s + sub * i.taxPercentage / 100 }, 0)
@@ -55,6 +57,7 @@ export default function QuickInvoiceSheet({ onClose }) {
         dateCreated: new Date().toISOString(),
         clientName, clientEmail, clientAddress,
         clientGSTIN, clientPhone, clientPAN,
+        notes,
         lineItems, subtotal, taxTotal, grandTotal,
         signatureDataUrl, status: 'Draft',
         pdfFilename: `${invoiceNum}.pdf`,
@@ -70,6 +73,7 @@ export default function QuickInvoiceSheet({ onClose }) {
       reader.readAsDataURL(pdfBlob)
 
       setLastPdfBlob(pdfBlob)
+      setLastGrandTotal(grandTotal)
       setSuccess(true)
 
       if (email) {
@@ -119,6 +123,15 @@ export default function QuickInvoiceSheet({ onClose }) {
                 a.download = `${lastInvoiceNum}.pdf`
                 a.click()
               }}>⬇ Download PDF</button>
+            )}
+            {clientPhone && (
+              <button style={glassBtn({ background: 'rgba(37,211,102,0.15)', borderColor: 'rgba(37,211,102,0.3)' })} onClick={() => {
+                const msg = encodeURIComponent(
+                  `Dear ${clientName},\n\nYour invoice *${lastInvoiceNum}* has been generated.\nGrand Total: ₹${lastGrandTotal.toFixed(2)}\n\nThank you for your business!\n\n— ${state.companyProfile?.companyName || 'SimpleInvoice'}`
+                )
+                const phone = clientPhone.replace(/\D/g, '')
+                window.open(`https://wa.me/${phone}?text=${msg}`, '_blank')
+              }}>💬 WhatsApp</button>
             )}
             <button onClick={onClose} style={glassBtn()}>Done</button>
           </div>
@@ -226,6 +239,18 @@ export default function QuickInvoiceSheet({ onClose }) {
               </div>
             </div>
           )}
+
+          {/* Notes */}
+          <div className="section-card">
+            <div className="section-header"><span className="section-icon">📝</span> Notes / Remarks</div>
+            <textarea
+              className="form-input form-textarea"
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              placeholder="Optional notes or remarks for this invoice…"
+              rows={2}
+            />
+          </div>
 
           {/* Signature */}
           <div className="section-card">

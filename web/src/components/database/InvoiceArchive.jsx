@@ -1,5 +1,6 @@
-﻿import React, { useState } from 'react'
-import { useStore } from '../../store/useStore'
+import React, { useState } from 'react'
+import { useStore, uuid } from '../../store/useStore'
+import { generateInvoiceNumber } from '../../utils/invoiceNumber'
 import StatusBadge from '../ui/StatusBadge'
 import FilterChip from '../ui/FilterChip'
 
@@ -22,6 +23,23 @@ export default function InvoiceArchive() {
     a.href = invoice.pdfBase64
     a.download = invoice.pdfFilename || `${invoice.invoiceNumber}.pdf`
     a.click()
+  }
+
+  function duplicateInvoice(invoice) {
+    const newNum = generateInvoiceNumber()
+    dispatch({
+      type: 'ADD_INVOICE',
+      payload: {
+        ...invoice,
+        id: uuid(),
+        invoiceNumber: newNum,
+        dateCreated: new Date().toISOString(),
+        status: 'Draft',
+        pdfBase64: null,
+        pdfFilename: `${newNum}.pdf`,
+        signatureDataUrl: null,
+      },
+    })
   }
 
   function exportAll() {
@@ -79,7 +97,7 @@ export default function InvoiceArchive() {
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
                     <span style={{ fontWeight: 700, fontSize: 14, color: 'white' }}>{invoice.invoiceNumber}</span>
-                    <span style={{ fontWeight: 700, fontSize: 15, color: 'rgba(255,255,255,0.9)' }}>Rs.{invoice.grandTotal.toFixed(2)}</span>
+                    <span style={{ fontWeight: 700, fontSize: 15, color: 'rgba(255,255,255,0.9)' }}>₹{invoice.grandTotal.toFixed(2)}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>{invoice.clientName}</span>
@@ -91,7 +109,7 @@ export default function InvoiceArchive() {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: 6, marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ display: 'flex', gap: 6, marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)', flexWrap: 'wrap' }}>
                 {invoice.pdfBase64 && (
                   <button onClick={() => downloadPDF(invoice)}
                     style={{ padding: '5px 12px', borderRadius: 7, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: 600 }}>
@@ -101,6 +119,10 @@ export default function InvoiceArchive() {
                 <button onClick={() => cycleStatus(invoice)}
                   style={{ padding: '5px 12px', borderRadius: 7, background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.2)', color: '#4ade80', fontSize: 12, fontWeight: 600 }}>
                   Mark {STATUS_CYCLE[invoice.status]}
+                </button>
+                <button onClick={() => duplicateInvoice(invoice)}
+                  style={{ padding: '5px 12px', borderRadius: 7, background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.2)', color: '#60a5fa', fontSize: 12, fontWeight: 600 }}>
+                  Duplicate
                 </button>
                 <button onClick={() => dispatch({ type: 'DELETE_INVOICE', payload: invoice.id })}
                   style={{ padding: '5px 12px', borderRadius: 7, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171', fontSize: 12, fontWeight: 600, marginLeft: 'auto' }}>
