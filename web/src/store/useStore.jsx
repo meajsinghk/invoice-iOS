@@ -139,8 +139,12 @@ function syncActionToRemote(action, priorState) {
       return api.deleteWorkRate(action.payload)
 
     case 'ADD_INVOICE':
-    case 'UPDATE_INVOICE':
       return api.saveInvoice(action.payload)
+    case 'UPDATE_INVOICE': {
+      // Send only metadata (no pdfBase64) so status updates don't hit Vercel's 4.5MB body limit
+      const { pdfBase64, ...meta } = action.payload
+      return api.saveInvoice({ ...meta, _metaOnly: true })
+    }
     case 'DELETE_INVOICE':
       return api.deleteInvoice(action.payload)
 

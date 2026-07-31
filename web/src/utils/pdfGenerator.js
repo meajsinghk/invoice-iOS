@@ -301,27 +301,54 @@ export async function generateInvoicePDF(invoice, companyProfile = {}) {
   const sigW = 200
   const sigX = pageW - margin - sigW
 
-  // Pre-signed stamp image — fetch as data URL so jsPDF can embed it cross-origin
+  // Load stamp image via HTMLImageElement + canvas — most reliable cross-browser approach
   if (p.stampImageUrl) {
     try {
-      let stampData = p.stampImageUrl
-      // If it's a relative URL or absolute HTTP, fetch and convert to base64
-      if (!stampData.startsWith('data:')) {
-        const absUrl = stampData.startsWith('http') ? stampData : window.location.origin + stampData
-        const resp = await fetch(absUrl)
+      const stampBase64 = await new Promise((resolve, reject) => {
+        const img = new window.Image()
+        img.crossOrigin = 'anonymous'
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          canvas.width = img.naturalWidth || img.width
+          canvas.height = img.naturalHeight || img.height
+          const ctx = canvas.getContext('2d')
+          ctx.drawImage(img, 0, 0)
+          try {
+            resolve(canvas.toDataURL('image/png'))
+          } catch {
+            // Canvas tainted (CORS) — fall back to fetch
+            reject(new Error('canvas tainted'))
+          }
+        }
+        img.onerror = () => reject(new Error('img load failed'))
+        // Force cache-busting on first load so browser doesn't block
+        const src = p.stampImageUrl.startsWith('http')
+          ? p.stampImageUrl
+          : `${window.location.origin}${p.stampImageUrl.startsWith('/') ? '' : '/'}${p.stampImageUrl}`
+        img.src = src
+      }).catch(async () => {
+        // Fallback: fetch → FileReader
+        const resp = await fetch(
+          p.stampImageUrl.startsWith('http')
+            ? p.stampImageUrl
+            : `${window.location.origin}${p.stampImageUrl.startsWith('/') ? '' : '/'}${p.stampImageUrl}`
+        )
         const blob = await resp.blob()
-        stampData = await new Promise((resolve, reject) => {
+        return new Promise((res2, rej2) => {
           const fr = new FileReader()
-          fr.onload = () => resolve(fr.result)
-          fr.onerror = reject
+          fr.onload = () => res2(fr.result)
+          fr.onerror = rej2
           fr.readAsDataURL(blob)
         })
-      }
-      const imgType = stampData.includes('image/jpeg') || stampData.includes('image/jpg') ? 'JPEG' : 'PNG'
-      doc.addImage(stampData, imgType, sigX, rightY, sigW * 0.85, 52)
-      rightY += 58
+      })
+
+      // Stamp dimensions: proportional to keep aspect ratio, max width = sigW * 0.85
+      const stampW = sigW * 0.85
+      const stampH = 56
+      doc.addImage(stampBase64, 'PNG', sigX, rightY, stampW, stampH)
+      rightY += stampH + 6
     } catch (e) {
-      console.warn('Stamp image failed to load:', e)
+      console.warn('[PDF] Stamp image failed to embed:', e.message)
     }
   }
 

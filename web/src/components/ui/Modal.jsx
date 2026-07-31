@@ -3,9 +3,15 @@ import './Modal.css'
 
 export default function Modal({ title, onClose, children, wide }) {
   React.useEffect(() => {
+    // Lock body scroll while modal is open
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
     const handler = (e) => { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', handler)
-    return () => document.removeEventListener('keydown', handler)
+    return () => {
+      document.body.style.overflow = prev
+      document.removeEventListener('keydown', handler)
+    }
   }, [onClose])
 
   return (

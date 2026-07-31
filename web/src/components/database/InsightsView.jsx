@@ -9,12 +9,14 @@ import { Bar } from 'react-chartjs-2'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
-// Responsive font size — shrinks for large numbers
+// Responsive font size — shrinks for large numbers to always fit on one line
 function amtFontSize(val) {
-  const s = String(Math.round(Math.abs(val)))
-  if (s.length >= 8) return 13
-  if (s.length >= 7) return 15
-  if (s.length >= 6) return 17
+  const digits = String(Math.round(Math.abs(val))).length
+  if (digits >= 10) return 12
+  if (digits >= 8) return 13
+  if (digits >= 7) return 14
+  if (digits >= 6) return 16
+  if (digits >= 5) return 18
   return 20
 }
 
@@ -121,7 +123,7 @@ export default function InsightsView({ timeRange = 'All Time' }) {
                 <span style={{ fontSize: 20 }}>{kpi.icon}</span>
                 <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', textAlign: 'right', maxWidth: 80 }}>{kpi.sub}</span>
               </div>
-              <div style={{ fontSize: fs, fontWeight: 800, color: 'white', marginBottom: 3, wordBreak: 'break-all', lineHeight: 1.2 }}>{display}</div>
+              <div style={{ fontSize: fs, fontWeight: 800, color: 'white', marginBottom: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.2 }}>{display}</div>
               <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>{kpi.label}</div>
             </div>
           )

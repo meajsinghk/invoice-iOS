@@ -116,6 +116,13 @@ export default function DetailLedgerModal({ entity, entityType, onClose, onOpenI
   const [showDelete, setShowDelete] = useState(false)
   const [showAddTxn, setShowAddTxn] = useState(false)
 
+  // Lock body scroll while this full-screen modal is open
+  React.useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
+  }, [])
+
   const entries = (state.ledgerEntries || [])
     .filter(e => e.entityId === entity.id)
     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
@@ -159,12 +166,15 @@ export default function DetailLedgerModal({ entity, entityType, onClose, onOpenI
         }}>
           <button onClick={onClose} style={{ color: 'rgba(255,255,255,0.5)', fontSize: 20, padding: '4px 8px', background: 'none', border: 'none', cursor: 'pointer' }}>←</button>
           <span style={{ fontWeight: 700, color: 'white', fontSize: 17, flex: 1 }}>Ledger</span>
-          <button onClick={() => setShowAddTxn(v => !v)} style={{
+          <button onClick={() => {
+              if (entityType === 'Client' && onOpenInvoice) { onClose(); onOpenInvoice() }
+              else setShowAddTxn(v => !v)
+            }} style={{
             padding: '7px 14px', borderRadius: 20, fontSize: 13, fontWeight: 700,
             background: showAddTxn ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)',
             border: '1px solid rgba(255,255,255,0.2)', color: 'white', cursor: 'pointer',
           }}>
-            {showAddTxn ? '✕ Cancel' : '➕ Add'}
+            {showAddTxn ? '✕ Cancel' : entityType === 'Client' ? '🧾 New Invoice' : '➕ Add'}
           </button>
         </div>
 
@@ -195,7 +205,12 @@ export default function DetailLedgerModal({ entity, entityType, onClose, onOpenI
                   background: 'rgba(255,255,255,0.05)', borderRadius: 14, padding: '10px 8px', textAlign: 'center',
                   border: '1px solid rgba(255,255,255,0.07)',
                 }}>
-                  <div style={{ fontSize: Math.max(11, 17 - String(Math.round(Math.abs(kpi.value))).length), fontWeight: 800, color: kpi.color, wordBreak: 'break-all', lineHeight: 1.2 }}>
+                  <div style={{
+                    fontSize: Math.max(9, 18 - Math.max(0, String(Math.round(Math.abs(kpi.value))).length - 4) * 1.5),
+                    fontWeight: 800, color: kpi.color,
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    lineHeight: 1.2,
+                  }}>
                     ₹{Math.abs(kpi.value).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                   </div>
                   <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginTop: 3 }}>{kpi.label}</div>
