@@ -76,44 +76,71 @@ export function exportAllDataToCSV(ledgerEntries = [], clients = [], operators =
   const sortedEntries = [...ledgerEntries].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
 
   // Build a set of invoice numbers already covered by ledger entries
-  // so we don't double-count when we include received-invoice rows below
   const coveredInvoiceNums = new Set(
     sortedEntries
       .filter(e => e.transactionType === 'ClientPayment' && e.noteDescription)
       .map(e => e.noteDescription.replace(/.*Invoice\s+/, '').trim())
   )
 
-  // Include invoices with status "Received" that don't already have a ledger entry
-  // These are older invoices that were received before the auto-entry was added
-  const receivedInvoiceRows = []
+  // Older received invoices not yet in ledger (pre-auto-entry)
+  const extraClientRows = []
   for (const inv of invoices) {
     if (inv.status !== 'Received') continue
     if (coveredInvoiceNums.has(inv.invoiceNumber)) continue
     const d = new Date(inv.date || inv.createdAt || Date.now())
     const dateStr = d.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
     const timeStr = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
-    const clientName = inv.clientName || ''
-    receivedInvoiceRows.push([
+
+    // Compute GST totals from line items if available
+    let totalCGST = 0, totalSGST = 0, totalIGST = 0
+    let cgstRate = '', sgstRate = '', igstRate = ''
+    if (inv.lineItems && inv.lineItems.length > 0) {
+      inv.lineItems.forEach(item => {
+        totalCGST += Number(item.cgstAmount || 0)
+        totalSGST += Number(item.sgstAmount || 0)
+        totalIGST += Number(item.igstAmount || 0)
+        if (!cgstRate && item.cgstRate) cgstRate = item.cgstRate
+        if (!sgstRate && item.sgstRate) sgstRate = item.sgstRate
+        if (!igstRate && item.igstRate) igstRate = item.igstRate
+      })
+    }
+
+    extraClientRows.push([
       dateStr, timeStr, inv.generatedByPerson || '',
-      'Client', clientName,
+      'Client', inv.clientName || '',
       `Invoice ${inv.invoiceNumber}`, '', '', '', inv.grandTotal || '',
-      '', '', '', '', '', '',
+      cgstRate, totalCGST || '', sgstRate, totalSGST || '', igstRate, totalIGST || '',
       inv.grandTotal || '',
-      inv.grandTotal || '', '',   // money in
+      inv.grandTotal || '', '',
       `Payment received for Invoice ${inv.invoiceNumber}`,
     ])
   }
 
-  const allRows = [...buildRows(sortedEntries, clients, operators), ...receivedInvoiceRows]
+  const clientEntries = sortedEntries.filter(e => e.entityType === 'Client')
+  const operatorEntries = sortedEntries.filter(e => e.entityType === 'Operator')
 
-  if (allRows.length === 0) {
+  const clientRows = [...buildRows(clientEntries, clients, operators), ...extraClientRows]
+  const operatorRows = buildRows(operatorEntries, clients, operators)
+
+  const dateTag = new Date().toISOString().slice(0, 10)
+
+  if (clientRows.length === 0 && operatorRows.length === 0) {
     alert('No transaction data to export yet.')
     return
   }
 
-  // Single combined CSV download
-  const csvContent = [CSV_HEADERS.join(','), ...allRows.map(rowToCSV)].join('\n')
-  downloadCSV(csvContent, `milan_construction_transactions_${new Date().toISOString().slice(0, 10)}.csv`)
+  if (clientRows.length > 0) {
+    const csvContent = [CSV_HEADERS.join(','), ...clientRows.map(rowToCSV)].join('\n')
+    downloadCSV(csvContent, `clients_ledger_${dateTag}.csv`)
+  }
+
+  if (operatorRows.length > 0) {
+    // Small delay so browser doesn't block two simultaneous downloads
+    setTimeout(() => {
+      const csvContent = [CSV_HEADERS.join(','), ...operatorRows.map(rowToCSV)].join('\n')
+      downloadCSV(csvContent, `operators_ledger_${dateTag}.csv`)
+    }, 400)
+  }
 }
 
 function downloadCSV(content, filename) {

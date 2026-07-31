@@ -345,11 +345,24 @@ export async function generateInvoicePDF(invoice, companyProfile = {}) {
       const mimeType = isPNG ? 'image/png' : 'image/jpeg'
       const dataUrl = `data:${mimeType};base64,${base64}`
 
-      const stampW = sigW * 0.85
-      const stampH = 60
-      // Clamp to page if near bottom
+      // Read natural dimensions from PNG IHDR (bytes 16–23) to preserve aspect ratio
+      let naturalW = 0, naturalH = 0
+      if (isPNG && bytes.length >= 24) {
+        naturalW = ((bytes[16] << 24) | (bytes[17] << 16) | (bytes[18] << 8) | bytes[19]) >>> 0
+        naturalH = ((bytes[20] << 24) | (bytes[21] << 16) | (bytes[22] << 8) | bytes[23]) >>> 0
+      }
+
+      // Stamp fills the right column width; height derived from aspect ratio (max 90pt)
+      const stampW = sigW * 0.95
+      const stampH = naturalW > 0
+        ? Math.min(90, stampW * (naturalH / naturalW))
+        : 72   // safe fallback if dimensions unreadable
+
+      // Clamp vertically — never run off-page
       const safeRightY = Math.min(rightY, pageH - margin - stampH - 20)
-      doc.addImage(dataUrl, imgType, sigX, safeRightY, stampW, stampH)
+
+      // 'NONE' alias avoids jsPDF adding a white background box on some builds
+      doc.addImage(dataUrl, imgType, sigX, safeRightY, stampW, stampH, undefined, 'NONE')
       rightY = safeRightY + stampH + 8
     } catch (e) {
       console.warn('[PDF] Stamp failed to embed:', e.message)
