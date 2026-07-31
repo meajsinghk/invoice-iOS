@@ -110,7 +110,7 @@ function AddTransactionForm({ entity, entityType, onSave, onCancel }) {
   )
 }
 
-export default function DetailLedgerModal({ entity, entityType, onClose }) {
+export default function DetailLedgerModal({ entity, entityType, onClose, onOpenInvoice }) {
   const { state, dispatch } = useStore()
   const [showEdit, setShowEdit] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
@@ -195,7 +195,7 @@ export default function DetailLedgerModal({ entity, entityType, onClose }) {
                   background: 'rgba(255,255,255,0.05)', borderRadius: 14, padding: '10px 8px', textAlign: 'center',
                   border: '1px solid rgba(255,255,255,0.07)',
                 }}>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: kpi.color, wordBreak: 'break-all' }}>
+                  <div style={{ fontSize: Math.max(11, 17 - String(Math.round(Math.abs(kpi.value))).length), fontWeight: 800, color: kpi.color, wordBreak: 'break-all', lineHeight: 1.2 }}>
                     ₹{Math.abs(kpi.value).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                   </div>
                   <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginTop: 3 }}>{kpi.label}</div>
@@ -223,7 +223,7 @@ export default function DetailLedgerModal({ entity, entityType, onClose }) {
               <div style={{ textAlign: 'center', padding: '32px 0', color: 'rgba(255,255,255,0.25)' }}>
                 <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
                 <p style={{ margin: 0 }}>No transactions yet</p>
-                <button onClick={() => setShowAddTxn(true)} style={{
+                <button onClick={() => { if (onOpenInvoice) { onClose(); onOpenInvoice() } else setShowAddTxn(true) }} style={{
                   marginTop: 12, padding: '8px 20px', borderRadius: 20, fontSize: 13, fontWeight: 600,
                   background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
                   color: 'white', cursor: 'pointer',

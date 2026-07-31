@@ -57,8 +57,8 @@ function AppInner({ currentUser }) {
       </header>
 
       <main className="app-main">
-        {activeTab === 'clients' && <ClientsView currentUser={currentUser} />}
-        {activeTab === 'operators' && <OperatorsView currentUser={currentUser} />}
+        {activeTab === 'clients' && <ClientsView currentUser={currentUser} onOpenInvoice={() => setShowInvoice(true)} />}
+        {activeTab === 'operators' && <OperatorsView currentUser={currentUser} onOpenInvoice={() => setShowInvoice(true)} />}
       </main>
 
       <FloatingTabBar

@@ -9,6 +9,15 @@ import { Bar } from 'react-chartjs-2'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
+// Responsive font size — shrinks for large numbers
+function amtFontSize(val) {
+  const s = String(Math.round(Math.abs(val)))
+  if (s.length >= 8) return 13
+  if (s.length >= 7) return 15
+  if (s.length >= 6) return 17
+  return 20
+}
+
 function getTimeRangeBounds(timeRange) {
   const now = new Date()
   const start = new Date()
@@ -36,7 +45,7 @@ function getTimeRangeBounds(timeRange) {
 
 export default function InsightsView({ timeRange = 'All Time' }) {
   const { state } = useStore()
-  const invoices = state.invoices
+  const invoices = state.invoices || []
   const ledgerEntries = state.ledgerEntries || []
 
   const rangeStart = getTimeRangeBounds(timeRange)
@@ -45,39 +54,48 @@ export default function InsightsView({ timeRange = 'All Time' }) {
   const filteredInvoices = invoices.filter(i => inRange(i.dateCreated))
   const filteredEntries = ledgerEntries.filter(e => inRange(e.timestamp))
 
-  const sentInvoices = filteredInvoices.filter(i => i.status === 'Sent')
+  // Invoices that were dispatched (Sent or Received, not just Draft)
+  const sentInvoices = filteredInvoices.filter(i => i.status === 'Sent' || i.status === 'Received' || i.status === 'Paid')
+  const receivedInvoices = filteredInvoices.filter(i => i.status === 'Received' || i.status === 'Paid')
+
+  // Sum from ledger entries for accurate amounts
   const totalClientInvoiceAmt = filteredEntries
     .filter(e => e.transactionType === 'ClientInvoice')
     .reduce((s, e) => s + Math.abs(e.amount), 0)
-  const totalOperatorPaymentAmt = filteredEntries
-    .filter(e => e.transactionType === 'OperatorPayment')
+
+  const totalClientReceivedAmt = filteredEntries
+    .filter(e => e.transactionType === 'ClientPayment')
     .reduce((s, e) => s + Math.abs(e.amount), 0)
 
-  const paidCount = filteredInvoices.filter(i => i.status === 'Paid').length
-  const draftCount = filteredInvoices.filter(i => i.status === 'Draft').length
+  const totalOperatorPaymentAmt = filteredEntries
+    .filter(e => e.transactionType === 'OperatorPayment' || e.transactionType === 'OperatorAdvance')
+    .reduce((s, e) => s + Math.abs(e.amount), 0)
 
   const kpis = [
-    { label: 'Invoices Sent', value: sentInvoices.length, sub: 'Sent status only', icon: '📤' },
-    { label: 'Client Invoice Total', value: `₹${totalClientInvoiceAmt.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`, sub: 'All client invoices', icon: '🧾' },
-    { label: 'Operator Payments', value: `₹${totalOperatorPaymentAmt.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`, sub: 'Paid to operators', icon: '🔧' },
-    { label: 'Paid Invoices', value: paidCount, sub: `${draftCount} drafts`, icon: '✅' },
+    { label: 'Invoices Sent', value: sentInvoices.length, isMoney: false, sub: `${receivedInvoices.length} received`, icon: '📤' },
+    { label: 'Client Invoice Total', value: totalClientInvoiceAmt, isMoney: true, sub: 'Total invoiced', icon: '🧾' },
+    { label: 'Payments Received', value: totalClientReceivedAmt, isMoney: true, sub: 'From clients', icon: '💰' },
+    { label: 'Operator Payments', value: totalOperatorPaymentAmt, isMoney: true, sub: 'Paid to operators', icon: '🔧' },
   ]
 
-  // Monthly breakdown (last 6 months)
+  // Monthly breakdown (last 6 months) — indexed by YYYY-MM
   const months = []
   const clientAmts = []
   const operatorAmts = []
   for (let i = 5; i >= 0; i--) {
     const d = new Date()
+    d.setDate(1)
     d.setMonth(d.getMonth() - i)
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
     months.push(d.toLocaleString('en-IN', { month: 'short' }))
     clientAmts.push(
-      ledgerEntries.filter(e => e.transactionType === 'ClientInvoice' && e.timestamp.startsWith(key))
+      ledgerEntries
+        .filter(e => e.transactionType === 'ClientInvoice' && (e.timestamp || '').slice(0, 7) === key)
         .reduce((s, e) => s + Math.abs(e.amount), 0)
     )
     operatorAmts.push(
-      ledgerEntries.filter(e => e.transactionType === 'OperatorPayment' && e.timestamp.startsWith(key))
+      ledgerEntries
+        .filter(e => (e.transactionType === 'OperatorPayment' || e.transactionType === 'OperatorAdvance') && (e.timestamp || '').slice(0, 7) === key)
         .reduce((s, e) => s + Math.abs(e.amount), 0)
     )
   }
@@ -92,22 +110,39 @@ export default function InsightsView({ timeRange = 'All Time' }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       {/* KPI Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        {kpis.map(kpi => (
-          <div key={kpi.label} style={cardStyle}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <span style={{ fontSize: 20 }}>{kpi.icon}</span>
-              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>{kpi.sub}</span>
+        {kpis.map(kpi => {
+          const display = kpi.isMoney
+            ? `₹${kpi.value.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
+            : kpi.value
+          const fs = kpi.isMoney ? amtFontSize(kpi.value) : 26
+          return (
+            <div key={kpi.label} style={cardStyle}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <span style={{ fontSize: 20 }}>{kpi.icon}</span>
+                <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', textAlign: 'right', maxWidth: 80 }}>{kpi.sub}</span>
+              </div>
+              <div style={{ fontSize: fs, fontWeight: 800, color: 'white', marginBottom: 3, wordBreak: 'break-all', lineHeight: 1.2 }}>{display}</div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>{kpi.label}</div>
             </div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: 'white', marginBottom: 3, wordBreak: 'break-all' }}>{kpi.value}</div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>{kpi.label}</div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* Monthly Bar Chart */}
       {(clientAmts.some(v => v > 0) || operatorAmts.some(v => v > 0)) && (
         <div style={{ ...cardStyle, padding: 16 }}>
           <div style={{ fontWeight: 700, marginBottom: 12, fontSize: 15, color: 'white' }}>Monthly Activity</div>
+          {/* Legend */}
+          <div style={{ display: 'flex', gap: 16, marginBottom: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ width: 12, height: 12, borderRadius: 3, background: 'rgba(255,255,255,0.85)' }} />
+              <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Client Invoices</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ width: 12, height: 12, borderRadius: 3, background: 'rgba(255,255,255,0.35)' }} />
+              <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', fontWeight: 600 }}>Operator Payments</span>
+            </div>
+          </div>
           <Bar
             data={{
               labels: months,
@@ -115,14 +150,14 @@ export default function InsightsView({ timeRange = 'All Time' }) {
                 {
                   label: 'Client Invoices',
                   data: clientAmts,
-                  backgroundColor: 'rgba(255,255,255,0.30)',
+                  backgroundColor: 'rgba(255,255,255,0.85)',
                   borderRadius: 5,
                   borderSkipped: false,
                 },
                 {
                   label: 'Operator Payments',
                   data: operatorAmts,
-                  backgroundColor: 'rgba(255,255,255,0.10)',
+                  backgroundColor: 'rgba(255,255,255,0.30)',
                   borderRadius: 5,
                   borderSkipped: false,
                 },
@@ -131,14 +166,20 @@ export default function InsightsView({ timeRange = 'All Time' }) {
             options={{
               responsive: true,
               plugins: {
-                legend: {
-                  display: true,
-                  labels: { color: 'rgba(255,255,255,0.5)', font: { size: 11 } },
+                legend: { display: false },
+                tooltip: {
+                  callbacks: {
+                    label: ctx => ` ₹${ctx.parsed.y.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`,
+                  },
                 },
               },
               scales: {
-                y: { beginAtZero: true, ticks: { callback: v => `₹${v}`, color: 'rgba(255,255,255,0.4)' }, grid: { color: 'rgba(255,255,255,0.05)' } },
-                x: { ticks: { color: 'rgba(255,255,255,0.4)' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                y: {
+                  beginAtZero: true,
+                  ticks: { callback: v => `₹${v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v}`, color: 'rgba(255,255,255,0.4)', font: { size: 11 } },
+                  grid: { color: 'rgba(255,255,255,0.05)' },
+                },
+                x: { ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
               },
             }}
           />

@@ -5,7 +5,7 @@ import OperatorFormModal from './OperatorFormModal'
 import DetailLedgerModal from '../shared/DetailLedgerModal'
 import '../clients/ClientsView.css'
 
-export default function OperatorsView({ currentUser }) {
+export default function OperatorsView({ currentUser, onOpenInvoice }) {
   const { state } = useStore()
   const [search, setSearch] = useState('')
   const [showAdd, setShowAdd] = useState(false)
@@ -51,6 +51,7 @@ export default function OperatorsView({ currentUser }) {
           entity={ledgerOperator}
           entityType="Operator"
           onClose={() => setLedgerOperator(null)}
+          onOpenInvoice={onOpenInvoice}
         />
       )}
     </div>

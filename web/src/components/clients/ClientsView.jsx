@@ -5,7 +5,7 @@ import ClientFormModal from './ClientFormModal'
 import DetailLedgerModal from '../shared/DetailLedgerModal'
 import './ClientsView.css'
 
-export default function ClientsView({ currentUser }) {
+export default function ClientsView({ currentUser, onOpenInvoice }) {
   const { state } = useStore()
   const [search, setSearch] = useState('')
   const [showAdd, setShowAdd] = useState(false)
@@ -50,6 +50,7 @@ export default function ClientsView({ currentUser }) {
           entity={ledgerClient}
           entityType="Client"
           onClose={() => setLedgerClient(null)}
+          onOpenInvoice={onOpenInvoice}
         />
       )}
     </div>

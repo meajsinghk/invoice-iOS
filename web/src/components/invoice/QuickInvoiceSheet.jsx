@@ -79,7 +79,6 @@ function ClientInvoiceForm({ onClose, currentUser }) {
       const invoiceNum = generateInvoiceNumber()
       setLastInvoiceNum(invoiceNum)
 
-      // Compute totals per item
       let subtotal = 0, taxTotal = 0
       lineItems.forEach(item => {
         const sub = item.quantity * item.unitPrice
@@ -103,39 +102,43 @@ function ClientInvoiceForm({ onClose, currentUser }) {
       const pdfBlob = await generateInvoicePDF(invoice, state.companyProfile)
       const blobUrl = URL.createObjectURL(pdfBlob)
 
+      // Convert blob → base64 and dispatch invoice + ledger entry
       const reader = new FileReader()
       reader.onload = () => {
-        dispatch({ type: 'ADD_INVOICE', payload: { ...invoice, pdfBase64: reader.result } })
-        // Also add ledger entry
+        const pdfBase64 = reader.result
+        dispatch({ type: 'ADD_INVOICE', payload: { ...invoice, pdfBase64 } })
+
+        // Always create ledger entry — use selectedClientId if available, else find by name, else use invoice id as placeholder
         const clientObj = state.clients.find(c => c.id === selectedClientId)
-        if (clientObj) {
-          dispatch({
-            type: 'ADD_LEDGER_ENTRY',
-            payload: {
-              id: uuid(),
-              timestamp: new Date().toISOString(),
-              transactionType: 'ClientInvoice',
-              amount: -grandTotal,
-              noteDescription: `Invoice ${invoiceNum}`,
-              generatedByPerson: currentUser || 'Unknown',
-              entityType: 'Client',
-              entityId: clientObj.id,
-              lineItems: lineItems.map(item => ({
-                particulars: item.title || item.particulars || '',
-                hsnCode: item.hsnCode,
-                qty: item.quantity,
-                rate: item.unitPrice,
-                amount: item.quantity * item.unitPrice,
-                cgstRate: item.cgstRate,
-                cgstAmount: (item.quantity * item.unitPrice) * (item.cgstRate || 0) / 100,
-                sgstRate: item.sgstRate,
-                sgstAmount: (item.quantity * item.unitPrice) * (item.sgstRate || 0) / 100,
-                igstRate: item.igstRate,
-                igstAmount: (item.quantity * item.unitPrice) * (item.igstRate || 0) / 100,
-              })),
-            },
-          })
-        }
+          || state.clients.find(c => c.name.toLowerCase() === clientName.toLowerCase())
+        const entityId = clientObj ? clientObj.id : invoice.id  // link to invoice id if no client profile
+
+        dispatch({
+          type: 'ADD_LEDGER_ENTRY',
+          payload: {
+            id: uuid(),
+            timestamp: new Date().toISOString(),
+            transactionType: 'ClientInvoice',
+            amount: -grandTotal,  // negative = we are owed this money
+            noteDescription: `Invoice ${invoiceNum}`,
+            generatedByPerson: currentUser || 'Unknown',
+            entityType: 'Client',
+            entityId,
+            lineItems: lineItems.map(item => ({
+              particulars: item.title || item.particulars || '',
+              hsnCode: item.hsnCode,
+              qty: item.quantity,
+              rate: item.unitPrice,
+              amount: item.quantity * item.unitPrice,
+              cgstRate: item.cgstRate,
+              cgstAmount: (item.quantity * item.unitPrice) * (item.cgstRate || 0) / 100,
+              sgstRate: item.sgstRate,
+              sgstAmount: (item.quantity * item.unitPrice) * (item.sgstRate || 0) / 100,
+              igstRate: item.igstRate,
+              igstAmount: (item.quantity * item.unitPrice) * (item.igstRate || 0) / 100,
+            })),
+          },
+        })
       }
       reader.readAsDataURL(pdfBlob)
 
@@ -150,7 +153,10 @@ function ClientInvoiceForm({ onClose, currentUser }) {
         const a = document.createElement('a')
         a.href = blobUrl
         a.download = `${invoiceNum}.pdf`
+        document.body.appendChild(a)
         a.click()
+        document.body.removeChild(a)
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000)
       }
     } finally {
       setIsGenerating(false)
@@ -277,7 +283,6 @@ function ClientInvoiceForm({ onClose, currentUser }) {
 
       {showAddItem && (
         <AddLineItemModal
-          workRates={state.workRates}
           isOperator={false}
           onAdd={item => setLineItems(prev => [...prev, item])}
           onClose={() => setShowAddItem(false)}
@@ -421,7 +426,6 @@ function OperatorPaymentForm({ onClose, currentUser }) {
 
       {showAddItem && (
         <AddLineItemModal
-          workRates={state.workRates}
           isOperator={true}
           onAdd={item => setTasks(prev => [...prev, item])}
           onClose={() => setShowAddItem(false)}

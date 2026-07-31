@@ -39,20 +39,35 @@ function reducer(state, action) {
     // LOAD merges DB data while preserving keys not returned by DB (e.g. pdfBase64 from localStorage)
     case 'LOAD': {
       const incoming = action.payload
-      // Merge invoices: prefer incoming but keep pdfBase64 from local if DB version missing it
+
+      // Union-merge by ID: keep ALL local entries, override with DB version if it exists.
+      // This prevents DB returning an empty/partial list from wiping local-only data.
+      function mergeById(localArr, incomingArr) {
+        if (!incomingArr || incomingArr.length === 0) return localArr || []
+        const dbMap = {}
+        incomingArr.forEach(item => { dbMap[item.id] = item })
+        const localMap = {}
+        ;(localArr || []).forEach(item => { localMap[item.id] = item })
+        // Union of all IDs, DB wins for conflicts
+        const allIds = new Set([...(localArr || []).map(i => i.id), ...incomingArr.map(i => i.id)])
+        return Array.from(allIds).map(id => dbMap[id] || localMap[id])
+      }
+
       const localInvoiceMap = {}
       ;(state.invoices || []).forEach(i => { localInvoiceMap[i.id] = i })
-      const mergedInvoices = (incoming.invoices || state.invoices || []).map(inv => ({
+      const mergedInvoices = mergeById(state.invoices, incoming.invoices).map(inv => ({
         ...inv,
+        // Always preserve pdfBase64 from local cache if DB doesn't have it
         pdfBase64: inv.pdfBase64 || (localInvoiceMap[inv.id] && localInvoiceMap[inv.id].pdfBase64) || null,
       }))
+
       return {
         ...state,
-        clients: incoming.clients ?? state.clients,
-        operators: incoming.operators ?? state.operators,
-        workRates: incoming.workRates ?? state.workRates,
+        clients: mergeById(state.clients, incoming.clients),
+        operators: mergeById(state.operators, incoming.operators),
+        workRates: mergeById(state.workRates, incoming.workRates),
         invoices: mergedInvoices,
-        ledgerEntries: incoming.ledgerEntries ?? state.ledgerEntries,
+        ledgerEntries: mergeById(state.ledgerEntries, incoming.ledgerEntries),
         companyProfile: incoming.companyProfile
           ? { ...defaultCompanyProfile, ...incoming.companyProfile }
           : state.companyProfile,

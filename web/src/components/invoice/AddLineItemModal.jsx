@@ -1,11 +1,9 @@
 import React, { useState } from 'react'
-import { useStore, uuid } from '../../store/useStore'
+import { uuid } from '../../store/useStore'
 import Modal from '../ui/Modal'
 import '../ui/forms.css'
 
-export default function AddLineItemModal({ workRates, onAdd, onClose, isOperator = false }) {
-  const [useRate, setUseRate] = useState(workRates.length > 0)
-  const [selectedRate, setSelectedRate] = useState(workRates[0]?.id || '')
+export default function AddLineItemModal({ onAdd, onClose, isOperator = false }) {
   const [title, setTitle] = useState('')
   const [hsnCode, setHsnCode] = useState('')
   const [quantity, setQuantity] = useState('1')
@@ -13,16 +11,6 @@ export default function AddLineItemModal({ workRates, onAdd, onClose, isOperator
   const [cgstRate, setCgstRate] = useState('0')
   const [sgstRate, setSgstRate] = useState('0')
   const [igstRate, setIgstRate] = useState('0')
-
-  function applyRate(rateId) {
-    setSelectedRate(rateId)
-    const r = workRates.find(r => r.id === rateId)
-    if (r) {
-      setTitle(r.title)
-      setHsnCode(r.hsnCode || '')
-      setUnitPrice(r.unitRate.toString())
-    }
-  }
 
   const qty = parseFloat(quantity) || 0
   const price = parseFloat(unitPrice) || 0
@@ -42,7 +30,6 @@ export default function AddLineItemModal({ workRates, onAdd, onClose, isOperator
       cgstRate: isOperator ? 0 : cgst,
       sgstRate: isOperator ? 0 : sgst,
       igstRate: isOperator ? 0 : igst,
-      // Keep backward compat
       taxPercentage: isOperator ? 0 : cgst + sgst + igst,
     })
     onClose()
@@ -61,31 +48,8 @@ export default function AddLineItemModal({ workRates, onAdd, onClose, isOperator
   return (
     <Modal title={isOperator ? 'Add Task' : 'Add Line Item'} onClose={onClose}>
       <div className="form-grid">
-        {workRates.length > 0 && (
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => setUseRate(true)}
-              style={{ flex: 1, padding: '8px', borderRadius: 8, background: useRate ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', color: 'white', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
-              From Rates
-            </button>
-            <button onClick={() => setUseRate(false)}
-              style={{ flex: 1, padding: '8px', borderRadius: 8, background: !useRate ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', color: 'white', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
-              Custom
-            </button>
-          </div>
-        )}
-
-        {useRate && workRates.length > 0 && (
-          <label className="form-label">Select Rate
-            <select className="form-input" value={selectedRate} onChange={e => applyRate(e.target.value)}>
-              {workRates.map(r => (
-                <option key={r.id} value={r.id}>{r.title} — ₹{r.unitRate}/unit</option>
-              ))}
-            </select>
-          </label>
-        )}
-
         <label className="form-label">{itemLabel} *
-          <input className="form-input" value={title} onChange={e => setTitle(e.target.value)} placeholder="Description" />
+          <input className="form-input" value={title} onChange={e => setTitle(e.target.value)} placeholder="Description" autoFocus />
         </label>
 
         {!isOperator && (

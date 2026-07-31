@@ -301,12 +301,28 @@ export async function generateInvoicePDF(invoice, companyProfile = {}) {
   const sigW = 200
   const sigX = pageW - margin - sigW
 
-  // Pre-signed stamp image
+  // Pre-signed stamp image — fetch as data URL so jsPDF can embed it cross-origin
   if (p.stampImageUrl) {
     try {
-      doc.addImage(p.stampImageUrl, 'PNG', sigX, rightY, sigW * 0.85, 48)
-      rightY += 54
-    } catch {}
+      let stampData = p.stampImageUrl
+      // If it's a relative URL or absolute HTTP, fetch and convert to base64
+      if (!stampData.startsWith('data:')) {
+        const absUrl = stampData.startsWith('http') ? stampData : window.location.origin + stampData
+        const resp = await fetch(absUrl)
+        const blob = await resp.blob()
+        stampData = await new Promise((resolve, reject) => {
+          const fr = new FileReader()
+          fr.onload = () => resolve(fr.result)
+          fr.onerror = reject
+          fr.readAsDataURL(blob)
+        })
+      }
+      const imgType = stampData.includes('image/jpeg') || stampData.includes('image/jpg') ? 'JPEG' : 'PNG'
+      doc.addImage(stampData, imgType, sigX, rightY, sigW * 0.85, 52)
+      rightY += 58
+    } catch (e) {
+      console.warn('Stamp image failed to load:', e)
+    }
   }
 
   doc.setDrawColor(100)
