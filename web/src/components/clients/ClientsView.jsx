@@ -2,17 +2,18 @@ import React, { useState } from 'react'
 import { useStore } from '../../store/useStore'
 import ClientCard from './ClientCard'
 import ClientFormModal from './ClientFormModal'
+import DetailLedgerModal from '../shared/DetailLedgerModal'
 import './ClientsView.css'
 
-export default function ClientsView() {
+export default function ClientsView({ currentUser }) {
   const { state } = useStore()
   const [search, setSearch] = useState('')
   const [showAdd, setShowAdd] = useState(false)
-  const [editClient, setEditClient] = useState(null)
+  const [ledgerClient, setLedgerClient] = useState(null)
 
   const filtered = state.clients.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.email.toLowerCase().includes(search.toLowerCase())
+    (c.email || '').toLowerCase().includes(search.toLowerCase())
   ).sort((a, b) => a.name.localeCompare(b.name))
 
   return (
@@ -38,13 +39,19 @@ export default function ClientsView() {
       ) : (
         <div className="card-list">
           {filtered.map(client => (
-            <ClientCard key={client.id} client={client} onEdit={() => setEditClient(client)} />
+            <ClientCard key={client.id} client={client} onOpenLedger={() => setLedgerClient(client)} />
           ))}
         </div>
       )}
 
       {showAdd && <ClientFormModal client={null} onClose={() => setShowAdd(false)} />}
-      {editClient && <ClientFormModal client={editClient} onClose={() => setEditClient(null)} />}
+      {ledgerClient && (
+        <DetailLedgerModal
+          entity={ledgerClient}
+          entityType="Client"
+          onClose={() => setLedgerClient(null)}
+        />
+      )}
     </div>
   )
 }

@@ -1,7 +1,7 @@
 import React from 'react'
 
-export default function ClientCard({ client, onOpenLedger }) {
-  const initials = (client.name || '?').trim().charAt(0).toUpperCase()
+export default function OperatorCard({ operator, onOpenLedger }) {
+  const initials = (operator.name || '?').trim().charAt(0).toUpperCase()
 
   return (
     <div
@@ -16,8 +16,8 @@ export default function ClientCard({ client, onOpenLedger }) {
       onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
       onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
     >
-      {client.avatarUrl ? (
-        <img src={client.avatarUrl} alt={client.name}
+      {operator.avatarUrl ? (
+        <img src={operator.avatarUrl} alt={operator.name}
           style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: '1px solid rgba(255,255,255,0.14)' }} />
       ) : (
         <div style={{
@@ -30,13 +30,11 @@ export default function ClientCard({ client, onOpenLedger }) {
       )}
 
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 2, color: 'white' }}>{client.name}</div>
-        {client.email && <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', marginBottom: 2 }}>{client.email}</div>}
-        {client.phone && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>📞 {client.phone}</div>}
-        {(client.gstin || client.taxID) && (
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
-            GSTIN: {client.gstin || client.taxID}
-          </div>
+        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 2, color: 'white' }}>{operator.name}</div>
+        {operator.phone && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>📞 {operator.phone}</div>}
+        {operator.address && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', marginTop: 2 }}>{operator.address}</div>}
+        {operator.panNumber && (
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>PAN: {operator.panNumber}</div>
         )}
       </div>
 

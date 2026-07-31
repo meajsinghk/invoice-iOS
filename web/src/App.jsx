@@ -1,12 +1,18 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { StoreProvider, useStore } from './store/useStore'
 import FloatingTabBar from './components/FloatingTabBar'
 import ClientsView from './components/clients/ClientsView'
+import OperatorsView from './components/operators/OperatorsView'
 import WorkRatesView from './components/rates/WorkRatesView'
 import QuickInvoiceSheet from './components/invoice/QuickInvoiceSheet'
 import InvoiceDatabaseSheet from './components/database/InvoiceDatabaseSheet'
 import CompanyProfileSheet from './components/company/CompanyProfileSheet'
+import AuthModal, { getAuthSession } from './components/auth/AuthModal'
 import './App.css'
+
+export function haptic() {
+  if (navigator.vibrate) navigator.vibrate(20)
+}
 
 function SyncStatus() {
   const { dbConnected } = useStore()
@@ -27,38 +33,58 @@ function SyncStatus() {
   )
 }
 
-export default function App() {
+const TAB_TITLES = { clients: 'Clients', operators: 'Operators', rates: 'Work Rates' }
+
+function AppInner({ currentUser }) {
   const [activeTab, setActiveTab] = useState('clients')
   const [showInvoice, setShowInvoice] = useState(false)
   const [showDatabase, setShowDatabase] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
 
   return (
+    <div className="app">
+      <header className="app-header">
+        <button className="icon-btn" onClick={() => { haptic(); setShowDatabase(true) }} title="Invoice Database">📁</button>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+          <h1 className="app-title">{TAB_TITLES[activeTab] || 'Milan Construction'}</h1>
+          <SyncStatus />
+        </div>
+        <button className="icon-btn" onClick={() => { haptic(); setShowProfile(true) }} title="Company Profile">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="8" r="4"/>
+            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+          </svg>
+        </button>
+      </header>
+
+      <main className="app-main">
+        {activeTab === 'clients' && <ClientsView currentUser={currentUser} />}
+        {activeTab === 'operators' && <OperatorsView currentUser={currentUser} />}
+        {activeTab === 'rates' && <WorkRatesView />}
+      </main>
+
+      <FloatingTabBar
+        activeTab={activeTab}
+        onTabChange={tab => { haptic(); setActiveTab(tab) }}
+        onPlus={() => { haptic(); setShowInvoice(true) }}
+      />
+
+      {showInvoice && <QuickInvoiceSheet onClose={() => setShowInvoice(false)} currentUser={currentUser} />}
+      {showDatabase && <InvoiceDatabaseSheet onClose={() => setShowDatabase(false)} />}
+      {showProfile && <CompanyProfileSheet onClose={() => setShowProfile(false)} />}
+    </div>
+  )
+}
+
+export default function App() {
+  const [session, setSession] = useState(() => getAuthSession())
+
+  return (
     <StoreProvider>
-      <div className="app">
-        <header className="app-header">
-          <button className="icon-btn" onClick={() => setShowDatabase(true)} title="Invoice Archive">📁</button>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-            <h1 className="app-title">{activeTab === 'clients' ? 'Clients' : 'Work Rates'}</h1>
-            <SyncStatus />
-          </div>
-          <button className="icon-btn" onClick={() => setShowProfile(true)} title="Company Profile">⚙️</button>
-        </header>
-
-        <main className="app-main">
-          {activeTab === 'clients' ? <ClientsView /> : <WorkRatesView />}
-        </main>
-
-        <FloatingTabBar
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          onPlus={() => setShowInvoice(true)}
-        />
-
-        {showInvoice && <QuickInvoiceSheet onClose={() => setShowInvoice(false)} />}
-        {showDatabase && <InvoiceDatabaseSheet onClose={() => setShowDatabase(false)} />}
-        {showProfile && <CompanyProfileSheet onClose={() => setShowProfile(false)} />}
-      </div>
+      {!session
+        ? <AuthModal onSuccess={s => setSession(s)} />
+        : <AppInner currentUser={session.personName} />
+      }
     </StoreProvider>
   )
 }

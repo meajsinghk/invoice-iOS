@@ -5,46 +5,82 @@ import {
   CategoryScale, LinearScale, BarElement,
   ArcElement, Title, Tooltip, Legend,
 } from 'chart.js'
-import { Bar, Doughnut } from 'react-chartjs-2'
+import { Bar } from 'react-chartjs-2'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
-export default function InsightsView() {
+function getTimeRangeBounds(timeRange) {
+  const now = new Date()
+  const start = new Date()
+  switch (timeRange) {
+    case 'Today':
+      start.setHours(0, 0, 0, 0)
+      break
+    case 'This Week':
+      start.setDate(now.getDate() - now.getDay())
+      start.setHours(0, 0, 0, 0)
+      break
+    case 'This Month':
+      start.setDate(1)
+      start.setHours(0, 0, 0, 0)
+      break
+    case 'This Year':
+      start.setMonth(0, 1)
+      start.setHours(0, 0, 0, 0)
+      break
+    default:
+      return null
+  }
+  return start
+}
+
+export default function InsightsView({ timeRange = 'All Time' }) {
   const { state } = useStore()
   const invoices = state.invoices
+  const ledgerEntries = state.ledgerEntries || []
 
-  const totalRevenue = invoices.filter(i => i.status === 'Paid').reduce((s, i) => s + i.grandTotal, 0)
-  const outstanding = invoices.filter(i => i.status !== 'Paid').reduce((s, i) => s + i.grandTotal, 0)
-  const paidCount = invoices.filter(i => i.status === 'Paid').length
-  const sentCount = invoices.filter(i => i.status === 'Sent').length
-  const draftCount = invoices.filter(i => i.status === 'Draft').length
-  const avgInvoice = invoices.length ? invoices.reduce((s, i) => s + i.grandTotal, 0) / invoices.length : 0
+  const rangeStart = getTimeRangeBounds(timeRange)
+  const inRange = d => !rangeStart || new Date(d) >= rangeStart
 
-  // Monthly revenue (last 6 months)
+  const filteredInvoices = invoices.filter(i => inRange(i.dateCreated))
+  const filteredEntries = ledgerEntries.filter(e => inRange(e.timestamp))
+
+  const sentInvoices = filteredInvoices.filter(i => i.status === 'Sent')
+  const totalClientInvoiceAmt = filteredEntries
+    .filter(e => e.transactionType === 'ClientInvoice')
+    .reduce((s, e) => s + Math.abs(e.amount), 0)
+  const totalOperatorPaymentAmt = filteredEntries
+    .filter(e => e.transactionType === 'OperatorPayment')
+    .reduce((s, e) => s + Math.abs(e.amount), 0)
+
+  const paidCount = filteredInvoices.filter(i => i.status === 'Paid').length
+  const draftCount = filteredInvoices.filter(i => i.status === 'Draft').length
+
+  const kpis = [
+    { label: 'Invoices Sent', value: sentInvoices.length, sub: 'Sent status only', icon: '📤' },
+    { label: 'Client Invoice Total', value: `₹${totalClientInvoiceAmt.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`, sub: 'All client invoices', icon: '🧾' },
+    { label: 'Operator Payments', value: `₹${totalOperatorPaymentAmt.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`, sub: 'Paid to operators', icon: '🔧' },
+    { label: 'Paid Invoices', value: paidCount, sub: `${draftCount} drafts`, icon: '✅' },
+  ]
+
+  // Monthly breakdown (last 6 months)
   const months = []
-  const monthRevenue = []
+  const clientAmts = []
+  const operatorAmts = []
   for (let i = 5; i >= 0; i--) {
     const d = new Date()
     d.setMonth(d.getMonth() - i)
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-    const label = d.toLocaleString('en-IN', { month: 'short' })
-    months.push(label)
-    const rev = invoices.filter(inv => inv.status === 'Paid' && inv.dateCreated.startsWith(key)).reduce((s, inv) => s + inv.grandTotal, 0)
-    monthRevenue.push(rev)
+    months.push(d.toLocaleString('en-IN', { month: 'short' }))
+    clientAmts.push(
+      ledgerEntries.filter(e => e.transactionType === 'ClientInvoice' && e.timestamp.startsWith(key))
+        .reduce((s, e) => s + Math.abs(e.amount), 0)
+    )
+    operatorAmts.push(
+      ledgerEntries.filter(e => e.transactionType === 'OperatorPayment' && e.timestamp.startsWith(key))
+        .reduce((s, e) => s + Math.abs(e.amount), 0)
+    )
   }
-
-  // Top clients
-  const clientMap = {}
-  invoices.forEach(inv => { clientMap[inv.clientName] = (clientMap[inv.clientName] || 0) + inv.grandTotal })
-  const topClients = Object.entries(clientMap).sort((a, b) => b[1] - a[1]).slice(0, 5)
-  const maxClientVal = topClients[0]?.[1] || 1
-
-  const kpis = [
-    { label: 'Total Revenue', value: `₹${totalRevenue.toFixed(0)}`, sub: `${paidCount} paid`, icon: '💰' },
-    { label: 'Invoices', value: invoices.length, sub: `${draftCount} drafts, ${sentCount} sent`, icon: '📄' },
-    { label: 'Outstanding', value: `₹${outstanding.toFixed(0)}`, sub: `${invoices.length - paidCount} unpaid`, icon: '⚠️' },
-    { label: 'Avg Invoice', value: invoices.length ? `₹${avgInvoice.toFixed(0)}` : '—', sub: 'per invoice', icon: '📊' },
-  ]
 
   const cardStyle = {
     background: 'rgba(255,255,255,0.05)',
@@ -68,90 +104,51 @@ export default function InsightsView() {
         ))}
       </div>
 
-      {/* Monthly Revenue Bar Chart */}
-      {monthRevenue.some(v => v > 0) && (
+      {/* Monthly Bar Chart */}
+      {(clientAmts.some(v => v > 0) || operatorAmts.some(v => v > 0)) && (
         <div style={{ ...cardStyle, padding: 16 }}>
-          <div style={{ fontWeight: 700, marginBottom: 12, fontSize: 15, color: 'white' }}>Monthly Revenue</div>
+          <div style={{ fontWeight: 700, marginBottom: 12, fontSize: 15, color: 'white' }}>Monthly Activity</div>
           <Bar
             data={{
               labels: months,
-              datasets: [{
-                label: 'Revenue (₹)',
-                data: monthRevenue,
-                backgroundColor: 'rgba(255,255,255,0.25)',
-                borderRadius: 6,
-                borderSkipped: false,
-              }],
+              datasets: [
+                {
+                  label: 'Client Invoices',
+                  data: clientAmts,
+                  backgroundColor: 'rgba(255,255,255,0.30)',
+                  borderRadius: 5,
+                  borderSkipped: false,
+                },
+                {
+                  label: 'Operator Payments',
+                  data: operatorAmts,
+                  backgroundColor: 'rgba(255,255,255,0.10)',
+                  borderRadius: 5,
+                  borderSkipped: false,
+                },
+              ],
             }}
             options={{
               responsive: true,
-              plugins: { legend: { display: false } },
+              plugins: {
+                legend: {
+                  display: true,
+                  labels: { color: 'rgba(255,255,255,0.5)', font: { size: 11 } },
+                },
+              },
               scales: {
-                y: { beginAtZero: true, ticks: { callback: v => `₹${v}`, color: 'rgba(255,255,255,0.45)' }, grid: { color: 'rgba(255,255,255,0.06)' } },
-                x: { ticks: { color: 'rgba(255,255,255,0.45)' }, grid: { color: 'rgba(255,255,255,0.06)' } },
+                y: { beginAtZero: true, ticks: { callback: v => `₹${v}`, color: 'rgba(255,255,255,0.4)' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                x: { ticks: { color: 'rgba(255,255,255,0.4)' }, grid: { color: 'rgba(255,255,255,0.05)' } },
               },
             }}
           />
         </div>
       )}
 
-      {/* Status Donut */}
-      {invoices.length > 0 && (
-        <div style={{ ...cardStyle, padding: 16 }}>
-          <div style={{ fontWeight: 700, marginBottom: 12, fontSize: 15, color: 'white' }}>Invoice Status</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
-            <div style={{ width: 120, height: 120, flexShrink: 0 }}>
-              <Doughnut
-                data={{
-                  labels: ['Draft', 'Sent', 'Paid'],
-                  datasets: [{
-                    data: [draftCount, sentCount, paidCount],
-                    backgroundColor: ['rgba(249,115,22,0.5)', 'rgba(96,165,250,0.5)', 'rgba(74,222,128,0.5)'],
-                    borderColor: ['#f97316', '#60a5fa', '#4ade80'],
-                    borderWidth: 2,
-                    hoverOffset: 4,
-                  }],
-                }}
-                options={{ plugins: { legend: { display: false } }, cutout: '60%' }}
-              />
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
-              {[['Draft', draftCount, '#f97316'], ['Sent', sentCount, '#60a5fa'], ['Paid', paidCount, '#4ade80']].map(([l, v, c]) => (
-                <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: c, display: 'inline-block', flexShrink: 0 }} />
-                  <span style={{ fontSize: 14, flex: 1, color: 'rgba(255,255,255,0.7)' }}>{l}</span>
-                  <span style={{ fontWeight: 700, fontSize: 14, color: 'white' }}>{v}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Top Clients */}
-      {topClients.length > 0 && (
-        <div style={{ ...cardStyle, padding: 16 }}>
-          <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15, color: 'white' }}>Top Clients by Spend</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {topClients.map(([name, val]) => (
-              <div key={name}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                  <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>{name}</span>
-                  <span style={{ fontWeight: 700, fontSize: 13, color: 'white' }}>₹{val.toFixed(0)}</span>
-                </div>
-                <div style={{ height: 5, borderRadius: 4, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-                  <div style={{ height: '100%', borderRadius: 4, width: `${(val / maxClientVal) * 100}%`, background: 'rgba(255,255,255,0.4)' }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {invoices.length === 0 && (
+      {filteredInvoices.length === 0 && filteredEntries.length === 0 && (
         <div style={{ textAlign: 'center', padding: '40px 0', color: 'rgba(255,255,255,0.3)' }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
-          <p>Generate invoices to see insights</p>
+          <p>No data for the selected time range</p>
         </div>
       )}
     </div>

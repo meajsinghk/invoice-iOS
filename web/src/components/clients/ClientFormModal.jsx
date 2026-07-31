@@ -10,10 +10,11 @@ export default function ClientFormModal({ client, onClose }) {
   const [address, setAddress] = useState(client?.address || '')
   const [gstin, setGstin] = useState(client?.gstin || client?.taxID || '')
   const [panNumber, setPanNumber] = useState(client?.panNumber || '')
+  const [avatarUrl, setAvatarUrl] = useState(client?.avatarUrl || '')
 
   function handleSave() {
     if (!name.trim()) return
-    const payload = { id: client?.id || uuid(), name, email, phone, address, gstin, panNumber }
+    const payload = { id: client?.id || uuid(), name, email, phone, address, gstin, panNumber, avatarUrl }
     dispatch({ type: client ? 'UPDATE_CLIENT' : 'ADD_CLIENT', payload })
     onClose()
   }
@@ -43,6 +44,9 @@ export default function ClientFormModal({ client, onClose }) {
             <input className="form-input" value={panNumber} onChange={e => setPanNumber(e.target.value.toUpperCase())} placeholder="ABCDE1234F" />
           </label>
         </div>
+        <label className="form-label">Avatar Image URL (optional)
+          <input className="form-input" value={avatarUrl} onChange={e => setAvatarUrl(e.target.value)} placeholder="https://…" />
+        </label>
         <button
           className="btn-primary"
           onClick={handleSave}

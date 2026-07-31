@@ -22,12 +22,15 @@ const defaultCompanyProfile = {
     'Goods once sold will not be taken back.',
   ],
   authorizedSignatoryName: 'Milandeep Virk',
+  stampImageUrl: '',
 }
 
 const initialState = {
   clients: [],
+  operators: [],
   workRates: [],
   invoices: [],
+  ledgerEntries: [],
   companyProfile: defaultCompanyProfile,
 }
 
@@ -42,6 +45,13 @@ function reducer(state, action) {
     case 'DELETE_CLIENT':
       return { ...state, clients: state.clients.filter(c => c.id !== action.payload) }
 
+    case 'ADD_OPERATOR':
+      return { ...state, operators: [...(state.operators || []), action.payload] }
+    case 'UPDATE_OPERATOR':
+      return { ...state, operators: (state.operators || []).map(o => o.id === action.payload.id ? action.payload : o) }
+    case 'DELETE_OPERATOR':
+      return { ...state, operators: (state.operators || []).filter(o => o.id !== action.payload) }
+
     case 'ADD_WORK_RATE':
       return { ...state, workRates: [...state.workRates, action.payload] }
     case 'UPDATE_WORK_RATE':
@@ -55,6 +65,13 @@ function reducer(state, action) {
       return { ...state, invoices: state.invoices.map(i => i.id === action.payload.id ? action.payload : i) }
     case 'DELETE_INVOICE':
       return { ...state, invoices: state.invoices.filter(i => i.id !== action.payload) }
+
+    case 'ADD_LEDGER_ENTRY':
+      return { ...state, ledgerEntries: [action.payload, ...(state.ledgerEntries || [])] }
+    case 'UPDATE_LEDGER_ENTRY':
+      return { ...state, ledgerEntries: (state.ledgerEntries || []).map(e => e.id === action.payload.id ? action.payload : e) }
+    case 'DELETE_LEDGER_ENTRY':
+      return { ...state, ledgerEntries: (state.ledgerEntries || []).filter(e => e.id !== action.payload) }
 
     case 'UPDATE_COMPANY_PROFILE':
       return { ...state, companyProfile: { ...state.companyProfile, ...action.payload } }

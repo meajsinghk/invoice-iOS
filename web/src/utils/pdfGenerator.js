@@ -1,8 +1,6 @@
 import jsPDF from 'jspdf'
 import { numberToWords } from './numberToWords'
 
-// Format a number: show as integer when there's no meaningful decimal part,
-// otherwise show up to 2 decimal places with trailing zeros trimmed.
 function fmt(n) {
   if (n === null || n === undefined || isNaN(n)) return '0'
   const rounded = Math.round(n * 100) / 100
@@ -34,6 +32,7 @@ export async function generateInvoicePDF(invoice, companyProfile = {}) {
       'Goods once sold will not be taken back.',
     ],
     authorizedSignatoryName: '',
+    stampImageUrl: '',
     ...companyProfile,
   }
 
@@ -45,33 +44,39 @@ export async function generateInvoicePDF(invoice, companyProfile = {}) {
   let y = margin
 
   // ── HEADER ──────────────────────────────────────────────────
-  doc.setFontSize(20)
+  doc.setFontSize(18)
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(10, 10, 10)
   doc.text(p.companyName.toUpperCase(), cx, y + 16, { align: 'center' })
   y += 22
 
   if (p.businessTagline) {
-    doc.setFontSize(10)
+    doc.setFontSize(9)
     doc.setFont('helvetica', 'normal')
     doc.setTextColor(60, 60, 60)
     doc.text(p.businessTagline, cx, y + 12, { align: 'center' })
     y += 14
   }
   if (p.businessServices) {
-    doc.setFontSize(9)
+    doc.setFontSize(8.5)
     doc.setTextColor(80, 80, 80)
-    doc.text(p.businessServices, cx, y + 12, { align: 'center' })
-    y += 14
+    const servLines = doc.splitTextToSize(p.businessServices, pageW - margin * 2)
+    servLines.forEach(line => {
+      doc.text(line, cx, y + 12, { align: 'center' })
+      y += 13
+    })
   }
 
   const addrParts = [p.addressLine1, p.addressLine2].filter(Boolean)
   if (addrParts.length) {
-    doc.setFontSize(9)
+    doc.setFontSize(8.5)
     doc.setTextColor(80, 80, 80)
-    doc.text(addrParts.join(', '), cx, y + 12, { align: 'center' })
-    y += 14
+    addrParts.forEach(line => {
+      doc.text(line, cx, y + 12, { align: 'center' })
+      y += 13
+    })
   }
+  y += 2
 
   const badges = [
     p.companyGSTIN && `GSTIN: ${p.companyGSTIN}`,
@@ -108,29 +113,31 @@ export async function generateInvoicePDF(invoice, companyProfile = {}) {
   const timeStr = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' })
 
   doc.setFontSize(9)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(30, 30, 30)
   const leftLines = [
     `Invoice No.: ${invoice.invoiceNumber}`,
-    `Billed To: ${invoice.clientName}`,
+    invoice.clientName && `Billed To: ${invoice.clientName}`,
     invoice.clientAddress && `Address: ${invoice.clientAddress}`,
     invoice.clientPhone && `Phone: ${invoice.clientPhone}`,
     invoice.clientGSTIN && `Party GSTIN: ${invoice.clientGSTIN}`,
     invoice.clientPAN && `Party PAN: ${invoice.clientPAN}`,
   ].filter(Boolean)
 
+  const lineH = 13
   leftLines.forEach((line, i) => {
+    const wrappedLines = doc.splitTextToSize(line, (pageW - margin * 2) * 0.55)
     doc.setFont('helvetica', i === 0 ? 'bold' : 'normal')
     doc.setTextColor(i === 0 ? 10 : 50, i === 0 ? 10 : 50, i === 0 ? 10 : 50)
-    doc.text(line, margin, y + i * 13)
+    wrappedLines.forEach((wl, wi) => {
+      doc.text(wl, margin, y + i * lineH + wi * lineH)
+    })
   })
 
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(50, 50, 50)
   doc.text(`Date: ${dateStr}`, pageW - margin, y, { align: 'right' })
-  doc.text(`Time: ${timeStr} IST`, pageW - margin, y + 13, { align: 'right' })
+  doc.text(`Time: ${timeStr} IST`, pageW - margin, y + lineH, { align: 'right' })
 
-  y += leftLines.length * 13 + 12
+  y += leftLines.length * lineH + 14
 
   doc.setDrawColor(200, 200, 200)
   doc.setLineWidth(0.5)
@@ -140,50 +147,77 @@ export async function generateInvoicePDF(invoice, companyProfile = {}) {
   // ── LINE ITEMS TABLE ─────────────────────────────────────────
   const { default: autoTable } = await import('jspdf-autotable')
 
+  const usableW = pageW - margin * 2
+
+  // Build rows with per-item tax
   const rows = invoice.lineItems.map((item, idx) => {
     const sub = item.quantity * item.unitPrice
+    const cgstAmt = sub * ((item.cgstRate || 0) / 100)
+    const sgstAmt = sub * ((item.sgstRate || 0) / 100)
+    const igstAmt = sub * ((item.igstRate || 0) / 100)
+    const total = sub + cgstAmt + sgstAmt + igstAmt
+
+    const taxParts = []
+    if (item.cgstRate > 0) taxParts.push(`CGST ${item.cgstRate}%`)
+    if (item.sgstRate > 0) taxParts.push(`SGST ${item.sgstRate}%`)
+    if (item.igstRate > 0) taxParts.push(`IGST ${item.igstRate}%`)
+
     return [
       idx + 1,
-      item.title,
+      item.title || item.particulars || '',
       item.hsnCode || '—',
       fmt(item.quantity),
       money(item.unitPrice),
-      money(sub),
+      taxParts.length ? taxParts.join('\n') : '—',
+      money(total),
     ]
   })
 
   autoTable(doc, {
     startY: y,
-    head: [['S.No', 'Particular Details', 'HSN Code', 'Qty', 'Rate', 'Amount']],
+    head: [['S.No', 'Particulars', 'HSN', 'Qty', 'Rate', 'Tax', 'Amount']],
     body: rows,
-    styles: { fontSize: 8.5, cellPadding: 5, lineColor: [200, 200, 200], lineWidth: 0.4 },
-    headStyles: { fillColor: [30, 30, 30], textColor: [255, 255, 255], fontSize: 8.5, fontStyle: 'bold', halign: 'center' },
+    styles: { fontSize: 8, cellPadding: 4, lineColor: [200, 200, 200], lineWidth: 0.4, overflow: 'linebreak' },
+    headStyles: { fillColor: [20, 20, 20], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold', halign: 'center' },
     columnStyles: {
-      0: { cellWidth: 32, halign: 'center' },
-      1: { cellWidth: 160 },
-      2: { cellWidth: 62, halign: 'center' },
-      3: { cellWidth: 44, halign: 'right' },
-      4: { cellWidth: 66, halign: 'right' },
-      5: { cellWidth: 66, halign: 'right' },
+      0: { cellWidth: usableW * 0.06, halign: 'center' },
+      1: { cellWidth: usableW * 0.30 },
+      2: { cellWidth: usableW * 0.10, halign: 'center' },
+      3: { cellWidth: usableW * 0.08, halign: 'right' },
+      4: { cellWidth: usableW * 0.14, halign: 'right' },
+      5: { cellWidth: usableW * 0.14, halign: 'center' },
+      6: { cellWidth: usableW * 0.18, halign: 'right' },
     },
     alternateRowStyles: { fillColor: [248, 248, 248] },
     margin: { left: margin, right: margin },
     tableLineColor: [180, 180, 180],
     tableLineWidth: 0.4,
+    tableWidth: usableW,
   })
 
   y = doc.lastAutoTable.finalY + 14
 
   // ── TOTALS ───────────────────────────────────────────────────
-  const cgst = invoice.taxTotal / 2
-  const sgst = invoice.taxTotal / 2
-  const totalsX = pageW - margin - 180
+  const totalsX = pageW - margin - 200
+
+  // Compute per-item totals
+  let subtotal = 0, totalCGST = 0, totalSGST = 0, totalIGST = 0
+  invoice.lineItems.forEach(item => {
+    const sub = item.quantity * item.unitPrice
+    subtotal += sub
+    totalCGST += sub * ((item.cgstRate || 0) / 100)
+    totalSGST += sub * ((item.sgstRate || 0) / 100)
+    totalIGST += sub * ((item.igstRate || 0) / 100)
+  })
+  const grandTotal = subtotal + totalCGST + totalSGST + totalIGST
 
   const totalsRows = [
-    ['Subtotal', invoice.subtotal],
-    ['CGST (9%)', cgst],
-    ['SGST (9%)', sgst],
+    ['Subtotal', subtotal],
+    ...(totalCGST > 0 ? [['CGST', totalCGST]] : []),
+    ...(totalSGST > 0 ? [['SGST', totalSGST]] : []),
+    ...(totalIGST > 0 ? [['IGST', totalIGST]] : []),
   ]
+
   doc.setFontSize(9)
   totalsRows.forEach(([label, val]) => {
     doc.setFont('helvetica', 'normal')
@@ -196,19 +230,27 @@ export async function generateInvoicePDF(invoice, companyProfile = {}) {
   doc.setDrawColor(30, 30, 30)
   doc.setLineWidth(0.8)
   doc.line(totalsX - 4, y - 4, pageW - margin, y - 4)
+
+  // Scale font for large numbers
+  const grandFontSize = grandTotal >= 100000 ? 9 : 11
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
+  doc.setFontSize(grandFontSize)
   doc.setTextColor(10, 10, 10)
   doc.text('Estimated Grand Total', totalsX, y + 8)
-  doc.text(money(invoice.grandTotal), pageW - margin, y + 8, { align: 'right' })
+  doc.text(money(grandTotal), pageW - margin, y + 8, { align: 'right' })
   y += 24
 
   // Amount in words
   doc.setFontSize(8.5)
   doc.setFont('helvetica', 'italic')
   doc.setTextColor(60, 60, 60)
-  doc.text(`Amount in Words: ${numberToWords(invoice.grandTotal)} Only`, margin, y)
-  y += 20
+  const wordsText = `Amount in Words: ${numberToWords(grandTotal)} Only`
+  const wordsLines = doc.splitTextToSize(wordsText, usableW)
+  wordsLines.forEach(line => {
+    doc.text(line, margin, y)
+    y += 13
+  })
+  y += 7
 
   doc.setDrawColor(200, 200, 200)
   doc.setLineWidth(0.5)
@@ -216,8 +258,7 @@ export async function generateInvoicePDF(invoice, companyProfile = {}) {
   y += 14
 
   // ── FOOTER: BANK + TERMS (left) & SIGNATORY (right) ─────────
-  const colMid = pageW / 2 - 10
-  const rightCol = pageW / 2 + 10
+  const rightColX = pageW / 2 + 10
   let leftY = y
   let rightY = y
 
@@ -249,33 +290,42 @@ export async function generateInvoicePDF(invoice, companyProfile = {}) {
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(50, 50, 50)
   ;(p.termsAndConditions || []).forEach((term, i) => {
-    doc.text(`${i + 1}. ${term}`, margin, leftY)
-    leftY += 11
+    const wrapped = doc.splitTextToSize(`${i + 1}. ${term}`, (pageW / 2 - margin - 16))
+    wrapped.forEach(wl => {
+      doc.text(wl, margin, leftY)
+      leftY += 11
+    })
   })
 
-  // Signatory box (right column)
-  doc.setFont('helvetica', 'normal')
-  doc.setTextColor(50, 50, 50)
-  doc.setFontSize(8.5)
-  doc.text(`For ${p.companyName}`, rightCol, rightY)
-  rightY += 12
-  doc.text('Proprietor / Authorised Signatory', rightCol, rightY)
-  rightY += 14
+  // ── RIGHT COLUMN: SIGNATORY (right-aligned) ──────────────────
+  const sigW = 200
+  const sigX = pageW - margin - sigW
 
-  if (invoice.signatureDataUrl) {
+  // Pre-signed stamp image
+  if (p.stampImageUrl) {
     try {
-      doc.addImage(invoice.signatureDataUrl, 'PNG', rightCol, rightY, 150, 42)
-      rightY += 48
+      doc.addImage(p.stampImageUrl, 'PNG', sigX, rightY, sigW * 0.85, 48)
+      rightY += 54
     } catch {}
   }
 
   doc.setDrawColor(100)
   doc.setLineWidth(0.5)
-  doc.line(rightCol, rightY, rightCol + 160, rightY)
+  doc.line(sigX, rightY, pageW - margin, rightY)
   rightY += 10
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8.5)
+  doc.setTextColor(10, 10, 10)
+  doc.text(`For M/S ${p.companyName}`, pageW - margin, rightY, { align: 'right' })
+  rightY += 12
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(50, 50, 50)
+  doc.text('Proprietor / Authorised Signatory', pageW - margin, rightY, { align: 'right' })
+  rightY += 12
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(10, 10, 10)
-  doc.text(p.authorizedSignatoryName || 'Authorised Signatory', rightCol, rightY)
+  doc.text(p.authorizedSignatoryName || 'Authorised Signatory', pageW - margin, rightY, { align: 'right' })
 
   // Page border
   doc.setDrawColor(180, 180, 180)
