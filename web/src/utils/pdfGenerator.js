@@ -320,70 +320,48 @@ export async function generateInvoicePDF(invoice, companyProfile = {}) {
   const sigX = pageW - margin - sigW
   const sigCx = sigX + sigW / 2   // center of the signature column
 
-  // STAMP IMAGE — pure fetch+btoa approach, no canvas needed, works in all browsers
+  // STAMP IMAGE — use Image element → canvas → JPEG for reliable rendering
+  // This bypasses jsPDF's PNG alpha handling quirks and preserves exact aspect ratio
   if (p.stampImageUrl) {
     try {
       const stampUrl = p.stampImageUrl.startsWith('http')
         ? p.stampImageUrl
         : `${window.location.origin}${p.stampImageUrl.startsWith('/') ? '' : '/'}${p.stampImageUrl}`
 
-      const resp = await fetch(stampUrl, { cache: 'force-cache' })
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-      const buffer = await resp.arrayBuffer()
-      const bytes = new Uint8Array(buffer)
+      // Load via Image element to get real natural dimensions + browser decode
+      const img = await new Promise((resolve, reject) => {
+        const el = new Image()
+        el.onload = () => resolve(el)
+        el.onerror = () => reject(new Error('Image element failed to load'))
+        el.src = stampUrl + (stampUrl.includes('?') ? '&' : '?') + '_t=' + Date.now()
+      })
 
-      // btoa in chunks to avoid call-stack overflow on large images
-      let binary = ''
-      const chunkSize = 8192
-      for (let offset = 0; offset < bytes.length; offset += chunkSize) {
-        binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize))
-      }
-      const base64 = btoa(binary)
+      const iw = img.naturalWidth || 423
+      const ih = img.naturalHeight || 718
 
-      // Detect image type: PNG magic = 89 50 4E 47, JPEG = FF D8
-      const isPNG = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47
-      const imgType = isPNG ? 'PNG' : 'JPEG'
-      const mimeType = isPNG ? 'image/png' : 'image/jpeg'
-      const dataUrl = `data:${mimeType};base64,${base64}`
+      // Render to canvas (white background eliminates alpha, gives clean JPEG for jsPDF)
+      const canvas = document.createElement('canvas')
+      canvas.width = iw
+      canvas.height = ih
+      const ctx = canvas.getContext('2d')
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, iw, ih)
+      ctx.drawImage(img, 0, 0, iw, ih)
+      const jpegDataUrl = canvas.toDataURL('image/jpeg', 0.92)
 
-      // Read natural dimensions from PNG IHDR (bytes 16–23) to preserve aspect ratio
-      let naturalW = 0, naturalH = 0
-      if (isPNG && bytes.length >= 24) {
-        naturalW = ((bytes[16] << 24) | (bytes[17] << 16) | (bytes[18] << 8) | bytes[19]) >>> 0
-        naturalH = ((bytes[20] << 24) | (bytes[21] << 16) | (bytes[22] << 8) | bytes[23]) >>> 0
-      }
-
-      // For portrait images (H > W) constrain by height; for landscape constrain by width
-      const maxW = sigW * 0.95
-      const maxH = 130
-      let stampW, stampH
-      if (naturalW > 0 && naturalH > 0) {
-        const aspectRatio = naturalW / naturalH
-        if (naturalH > naturalW) {
-          // Portrait: fit to max height
-          stampH = maxH
-          stampW = stampH * aspectRatio
-          if (stampW > maxW) { stampW = maxW; stampH = stampW / aspectRatio }
-        } else {
-          // Landscape: fit to max width
-          stampW = maxW
-          stampH = stampW / aspectRatio
-          if (stampH > maxH) { stampH = maxH; stampW = stampH * aspectRatio }
-        }
-      } else {
-        stampW = 90; stampH = 120   // safe fallback for unknown dimensions
-      }
-
-      // Clamp vertically — never run off-page
-      const safeRightY = Math.min(rightY, pageH - margin - stampH - 30)
+      // Scale to fit signature column — maintain exact aspect ratio (h/w)
+      const aspectHW = ih / iw   // height-to-width ratio; >1 = portrait
+      const targetH = 125        // desired stamp height in pt
+      const safeRightY = Math.min(rightY, pageH - margin - targetH - 30)
+      const finalH = Math.min(targetH, pageH - margin - safeRightY - 30)
+      const finalW = finalH / aspectHW    // width derived from height: w = h / (h/w)
 
       // Center the stamp horizontally within the signature column
-      const stampX = sigCx - stampW / 2
-      // 'NONE' alias avoids jsPDF adding a white background box on some builds
-      doc.addImage(dataUrl, imgType, stampX, safeRightY, stampW, stampH, undefined, 'NONE')
-      rightY = safeRightY + stampH + 8
+      const stampX = sigCx - finalW / 2
+      doc.addImage(jpegDataUrl, 'JPEG', stampX, safeRightY, finalW, finalH)
+      rightY = safeRightY + finalH + 8
     } catch (e) {
-      console.warn('[PDF] Stamp failed to embed:', e.message)
+      console.warn('[PDF] Stamp failed:', e.message)
       doc.setFontSize(7)
       doc.setTextColor(180, 0, 0)
       doc.text('[Stamp not loaded]', sigCx, rightY + 8, { align: 'center' })

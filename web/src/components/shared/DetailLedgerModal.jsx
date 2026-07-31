@@ -147,98 +147,106 @@ export default function DetailLedgerModal({ entity, entityType, onClose, onOpenI
   // (labels now inline in JSX)
 
   return (
+    // Outer: fixed, no scroll, flex column
     <div style={{
       position: 'fixed', inset: 0, zIndex: 500,
-      background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)',
-      overflowY: 'auto',
+      background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)',
+      display: 'flex', flexDirection: 'column',
+      overflow: 'hidden',
     }} onClick={e => e.target === e.currentTarget && onClose()}>
+      {/* Inner column: max-width, full height, flex */}
       <div style={{
-        minHeight: '100%', display: 'flex', flexDirection: 'column',
-        maxWidth: 680, margin: '0 auto',
-        background: '#0d0d0d',
+        maxWidth: 680, width: '100%', margin: '0 auto',
+        height: '100%', display: 'flex', flexDirection: 'column',
+        background: '#0d0d0d', overflow: 'hidden',
       }}>
-        {/* Header */}
+        {/* Sticky header — never scrolls */}
         <div style={{
-          position: 'sticky', top: 0, zIndex: 10,
-          background: 'rgba(13,13,13,0.95)', backdropFilter: 'blur(20px)',
+          flexShrink: 0,
+          background: 'rgba(13,13,13,0.98)', backdropFilter: 'blur(20px)',
           borderBottom: '1px solid rgba(255,255,255,0.08)',
-          padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12,
+          padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12,
         }}>
-          <button onClick={onClose} style={{ color: 'rgba(255,255,255,0.5)', fontSize: 20, padding: '4px 8px', background: 'none', border: 'none', cursor: 'pointer' }}>←</button>
-          <span style={{ fontWeight: 700, color: 'white', fontSize: 17, flex: 1 }}>Ledger</span>
+          <button onClick={onClose} style={{ color: 'rgba(255,255,255,0.5)', fontSize: 20, padding: '4px 8px', background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0 }}>←</button>
+          <span style={{ fontWeight: 700, color: 'white', fontSize: 17, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {entity.name}
+          </span>
           <button onClick={() => {
               if (entityType === 'Client' && onOpenInvoice) { onClose(); onOpenInvoice() }
               else setShowAddTxn(v => !v)
             }} style={{
-            padding: '7px 14px', borderRadius: 20, fontSize: 13, fontWeight: 700,
+            padding: '7px 12px', borderRadius: 20, fontSize: 13, fontWeight: 700, flexShrink: 0,
             background: showAddTxn ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)',
             border: '1px solid rgba(255,255,255,0.2)', color: 'white', cursor: 'pointer',
           }}>
-            {showAddTxn ? '✕ Cancel' : entityType === 'Client' ? '🧾 New Invoice' : '➕ Add'}
+            {showAddTxn ? '✕ Cancel' : entityType === 'Client' ? '🧾 Invoice' : '➕ Add'}
           </button>
         </div>
 
-        <div style={{ padding: '20px 20px 100px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {/* Scrollable content — only ONE scroll bar for the whole page */}
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', padding: '16px 16px 100px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* Profile Card */}
           <div style={{
             background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)',
-            borderRadius: 20, padding: 20,
+            borderRadius: 20, padding: 16,
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
-              <Avatar entity={entity} size={60} />
-              <div>
-                <div style={{ fontWeight: 800, fontSize: 18, color: 'white' }}>{entity.name}</div>
-                {entity.address && <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginTop: 2 }}>{entity.address}</div>}
-                {entity.phone && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', marginTop: 2 }}>📞 {entity.phone}</div>}
-                {entity.gstin && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>GSTIN: {entity.gstin}</div>}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+              <Avatar entity={entity} size={52} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 800, fontSize: 16, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entity.name}</div>
+                {entity.address && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entity.address}</div>}
+                {entity.phone && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 2 }}>📞 {entity.phone}</div>}
+                {entity.gstin && <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>GSTIN: {entity.gstin}</div>}
               </div>
             </div>
 
-            {/* KPI Badges — 2-col for Operator (no Balance), 3-col for Client */}
+            {/* KPI Badges — font scales down for large amounts, cards always 1 line */}
             {entityType === 'Client' ? (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                 {[
                   { label: 'Balance', value: balance, color: balance >= 0 ? '#4ade80' : '#f87171' },
                   { label: 'Received', value: totalIn, color: '#4ade80' },
                   { label: 'Invoiced', value: totalOut, color: '#f87171' },
-                ].map(kpi => (
-                  <div key={kpi.label} style={{
-                    background: 'rgba(255,255,255,0.05)', borderRadius: 14, padding: '10px 8px', textAlign: 'center',
-                    border: '1px solid rgba(255,255,255,0.07)',
-                  }}>
-                    <div style={{
-                      fontSize: Math.max(9, 18 - Math.max(0, String(Math.round(Math.abs(kpi.value))).length - 4) * 1.5),
-                      fontWeight: 800, color: kpi.color,
-                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.2,
+                ].map(kpi => {
+                  const digits = String(Math.round(Math.abs(kpi.value))).length
+                  const fs = Math.max(8, 17 - Math.max(0, digits - 3) * 2)
+                  return (
+                    <div key={kpi.label} style={{
+                      background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: '8px 4px', textAlign: 'center',
+                      border: '1px solid rgba(255,255,255,0.07)',
                     }}>
-                      ₹{Math.abs(kpi.value).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                      <div style={{ fontSize: fs, fontWeight: 800, color: kpi.color, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.2 }}>
+                        ₹{Math.abs(kpi.value).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                      </div>
+                      <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', marginTop: 3 }}>{kpi.label}</div>
                     </div>
-                    <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginTop: 3 }}>{kpi.label}</div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                 {[
                   { label: 'Paid Out', value: totalIn, color: '#4ade80' },
                   { label: 'Advances', value: totalOut, color: '#f87171' },
-                ].map(kpi => (
-                  <div key={kpi.label} style={{
-                    background: 'rgba(255,255,255,0.05)', borderRadius: 14, padding: '10px 12px', textAlign: 'center',
-                    border: '1px solid rgba(255,255,255,0.07)',
-                  }}>
-                    <div style={{
-                      fontSize: Math.max(9, 20 - Math.max(0, String(Math.round(Math.abs(kpi.value))).length - 4) * 1.5),
-                      fontWeight: 800, color: kpi.color,
-                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.2,
+                ].map(kpi => {
+                  const digits = String(Math.round(Math.abs(kpi.value))).length
+                  const fs = Math.max(8, 19 - Math.max(0, digits - 3) * 2)
+                  return (
+                    <div key={kpi.label} style={{
+                      background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: '8px 10px', textAlign: 'center',
+                      border: '1px solid rgba(255,255,255,0.07)',
                     }}>
-                      ₹{Math.abs(kpi.value).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                      <div style={{ fontSize: fs, fontWeight: 800, color: kpi.color, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.2 }}>
+                        ₹{Math.abs(kpi.value).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                      </div>
+                      <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', marginTop: 3 }}>{kpi.label}</div>
                     </div>
-                    <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginTop: 3 }}>{kpi.label}</div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
+                      fontSize: Math.max(9, 20 - Math.max(0, String(Math.round(Math.abs(kpi.value))).length - 4) * 1.5),
           </div>
 
           {/* Add Transaction Form (inline) */}
@@ -313,8 +321,9 @@ export default function DetailLedgerModal({ entity, entityType, onClose, onOpenI
               color: '#f87171', cursor: 'pointer',
             }}>🗑 Delete Profile</button>
           </div>
-        </div>
-      </div>
+          </div>{/* end flex column */}
+        </div>{/* end scrollable area */}
+      </div>{/* end inner column */}
 
       {showEdit && entityType === 'Client' && (
         <ClientFormModal client={entity} onClose={() => setShowEdit(false)} />

@@ -1,17 +1,17 @@
 .app {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;  /* dynamic viewport height — accounts for iOS safari bar */
   max-width: 680px;
   margin: 0 auto;
   position: relative;
   background: var(--bg);
-  /* Side margins so content never touches the screen edge */
-  padding-left: 4px;
-  padding-right: 4px;
+  overflow: hidden;  /* no body-level scroll; only .app-main scrolls */
 }
 
 .app-header {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -19,7 +19,7 @@
   position: sticky;
   top: 0;
   z-index: 10;
-  background: rgba(10,10,10,0.85);
+  background: rgba(10,10,10,0.95);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border);
@@ -50,12 +50,14 @@
   transition: transform 0.15s, background 0.15s;
   font-size: 16px;
   color: var(--text);
+  flex-shrink: 0;
 }
 .icon-btn:hover { transform: scale(1.06); background: rgba(255,255,255,0.12); }
 
 .app-main {
   flex: 1;
-  padding: 8px 8px 120px;
+  min-height: 0;           /* critical for flex children to be scrollable */
   overflow-y: auto;
   overflow-x: hidden;
+  padding: 8px 0 120px;
 }

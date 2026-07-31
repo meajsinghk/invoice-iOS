@@ -1,14 +1,28 @@
-.view-container { padding: 0 16px; }
+.view-container {
+  padding: 0 12px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
 
 .search-bar-wrapper {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--bg);
+  padding: 10px 0 10px;
   display: flex;
-  gap: 10px;
-  margin-bottom: 14px;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  margin-bottom: 4px;
 }
 
 .search-input {
   flex: 1;
-  padding: 10px 14px;
+  min-width: 0;   /* prevents flex child from overflowing */
+  padding: 9px 12px;
   border-radius: 12px;
   border: 1px solid var(--glass-border);
   background: rgba(255,255,255,0.06);
@@ -21,7 +35,8 @@
 .search-input::placeholder { color: var(--text-tertiary); }
 
 .add-btn {
-  padding: 10px 18px;
+  flex-shrink: 0;
+  padding: 9px 14px;
   border-radius: 12px;
   background: rgba(255,255,255,0.10);
   border: 1px solid rgba(255,255,255,0.18);

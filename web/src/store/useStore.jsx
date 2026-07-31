@@ -32,6 +32,7 @@ const initialState = {
   invoices: [],
   ledgerEntries: [],
   companyProfile: defaultCompanyProfile,
+  _deletedIds: [],  // locally deleted IDs; filters out items that DB might re-introduce
 }
 
 function reducer(state, action) {
@@ -39,18 +40,21 @@ function reducer(state, action) {
     // LOAD merges DB data while preserving keys not returned by DB (e.g. pdfBase64 from localStorage)
     case 'LOAD': {
       const incoming = action.payload
+      // Items the user deleted locally — never let DB bring them back
+      const deletedSet = new Set(state._deletedIds || [])
 
       // Union-merge by ID: keep ALL local entries, override with DB version if it exists.
-      // This prevents DB returning an empty/partial list from wiping local-only data.
+      // Deleted IDs are filtered out so they never reappear after DB sync.
       function mergeById(localArr, incomingArr) {
-        if (!incomingArr || incomingArr.length === 0) return localArr || []
+        if (!incomingArr || incomingArr.length === 0) return (localArr || []).filter(i => !deletedSet.has(i.id))
         const dbMap = {}
         incomingArr.forEach(item => { dbMap[item.id] = item })
         const localMap = {}
         ;(localArr || []).forEach(item => { localMap[item.id] = item })
-        // Union of all IDs, DB wins for conflicts
         const allIds = new Set([...(localArr || []).map(i => i.id), ...incomingArr.map(i => i.id)])
-        return Array.from(allIds).map(id => dbMap[id] || localMap[id])
+        return Array.from(allIds)
+          .filter(id => !deletedSet.has(id))
+          .map(id => dbMap[id] || localMap[id])
       }
 
       const localInvoiceMap = {}
@@ -76,6 +80,7 @@ function reducer(state, action) {
               stampImageUrl: incoming.companyProfile.stampImageUrl || defaultCompanyProfile.stampImageUrl,
             }
           : state.companyProfile,
+        _deletedIds: state._deletedIds || [],
       }
     }
 
@@ -84,35 +89,35 @@ function reducer(state, action) {
     case 'UPDATE_CLIENT':
       return { ...state, clients: state.clients.map(c => c.id === action.payload.id ? action.payload : c) }
     case 'DELETE_CLIENT':
-      return { ...state, clients: state.clients.filter(c => c.id !== action.payload) }
+      return { ...state, clients: state.clients.filter(c => c.id !== action.payload), _deletedIds: [...(state._deletedIds || []), action.payload] }
 
     case 'ADD_OPERATOR':
       return { ...state, operators: [...(state.operators || []), action.payload] }
     case 'UPDATE_OPERATOR':
       return { ...state, operators: (state.operators || []).map(o => o.id === action.payload.id ? action.payload : o) }
     case 'DELETE_OPERATOR':
-      return { ...state, operators: (state.operators || []).filter(o => o.id !== action.payload) }
+      return { ...state, operators: (state.operators || []).filter(o => o.id !== action.payload), _deletedIds: [...(state._deletedIds || []), action.payload] }
 
     case 'ADD_WORK_RATE':
       return { ...state, workRates: [...state.workRates, action.payload] }
     case 'UPDATE_WORK_RATE':
       return { ...state, workRates: state.workRates.map(r => r.id === action.payload.id ? action.payload : r) }
     case 'DELETE_WORK_RATE':
-      return { ...state, workRates: state.workRates.filter(r => r.id !== action.payload) }
+      return { ...state, workRates: state.workRates.filter(r => r.id !== action.payload), _deletedIds: [...(state._deletedIds || []), action.payload] }
 
     case 'ADD_INVOICE':
       return { ...state, invoices: [action.payload, ...state.invoices] }
     case 'UPDATE_INVOICE':
       return { ...state, invoices: state.invoices.map(i => i.id === action.payload.id ? action.payload : i) }
     case 'DELETE_INVOICE':
-      return { ...state, invoices: state.invoices.filter(i => i.id !== action.payload) }
+      return { ...state, invoices: state.invoices.filter(i => i.id !== action.payload), _deletedIds: [...(state._deletedIds || []), action.payload] }
 
     case 'ADD_LEDGER_ENTRY':
       return { ...state, ledgerEntries: [action.payload, ...(state.ledgerEntries || [])] }
     case 'UPDATE_LEDGER_ENTRY':
       return { ...state, ledgerEntries: (state.ledgerEntries || []).map(e => e.id === action.payload.id ? action.payload : e) }
     case 'DELETE_LEDGER_ENTRY':
-      return { ...state, ledgerEntries: (state.ledgerEntries || []).filter(e => e.id !== action.payload) }
+      return { ...state, ledgerEntries: (state.ledgerEntries || []).filter(e => e.id !== action.payload), _deletedIds: [...(state._deletedIds || []), action.payload] }
 
     case 'UPDATE_COMPANY_PROFILE':
       return { ...state, companyProfile: { ...state.companyProfile, ...action.payload } }
